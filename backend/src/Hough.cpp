@@ -1,16 +1,12 @@
 #include "Hough.hpp"
-
 #include <algorithm>
 #include <cmath>
-#include <cstddef>
-#include <numeric>
 #include <stdexcept>
 #include <vector>
 
 namespace backend {
 
 namespace {
-
 constexpr double kPi = 3.14159265358979323846;
 
 bool isEdgePixel(const GrayImage& edgeImage, int x, int y) {
@@ -26,7 +22,6 @@ void keepTopByVotes(std::vector<T>& detections, int maxCount) {
         detections.resize(static_cast<size_t>(maxCount));
     }
 }
-
 } // namespace
 
 std::vector<LineDetection> detectLinesHough(
@@ -35,12 +30,8 @@ std::vector<LineDetection> detectLinesHough(
     int maxLines,
     double thetaStepDegrees,
     double rhoStep) {
-    if (!edgeImage.isValid()) {
-        throw std::invalid_argument("Edge image is invalid");
-    }
-    if (voteThreshold <= 0 || maxLines <= 0 || thetaStepDegrees <= 0.0 || rhoStep <= 0.0) {
-        throw std::invalid_argument("Invalid Hough line parameters");
-    }
+
+    if (!edgeImage.isValid()) throw std::invalid_argument("Edge image is invalid");
 
     const int width = edgeImage.width;
     const int height = edgeImage.height;
@@ -50,22 +41,21 @@ std::vector<LineDetection> detectLinesHough(
 
     std::vector<int> accumulator(static_cast<size_t>(rhoBins * thetaBins), 0);
 
-    std::vector<double> cosTable(static_cast<size_t>(thetaBins), 0.0);
-    std::vector<double> sinTable(static_cast<size_t>(thetaBins), 0.0);
+    // Precompute Trig Tables
+    std::vector<double> cosTable(thetaBins), sinTable(thetaBins);
     for (int t = 0; t < thetaBins; ++t) {
-        const double theta = (static_cast<double>(t) * thetaStepDegrees) * kPi / 180.0;
-        cosTable[static_cast<size_t>(t)] = std::cos(theta);
-        sinTable[static_cast<size_t>(t)] = std::sin(theta);
+        double theta = (static_cast<double>(t) * thetaStepDegrees) * kPi / 180.0;
+        cosTable[t] = std::cos(theta);
+        sinTable[t] = std::sin(theta);
     }
 
+    // Voting
     for (int y = 0; y < height; ++y) {
         for (int x = 0; x < width; ++x) {
-            if (!isEdgePixel(edgeImage, x, y)) {
-                continue;
-            }
+            if (!isEdgePixel(edgeImage, x, y)) continue;
             for (int t = 0; t < thetaBins; ++t) {
-                const double rho = x * cosTable[static_cast<size_t>(t)] + y * sinTable[static_cast<size_t>(t)];
-                const int r = static_cast<int>(std::round((rho + diag) / rhoStep));
+                double rho = x * cosTable[t] + y * sinTable[t];
+                int r = static_cast<int>(std::round((rho + diag) / rhoStep));
                 if (r >= 0 && r < rhoBins) {
                     ++accumulator[static_cast<size_t>(t * rhoBins + r)];
                 }
@@ -73,16 +63,35 @@ std::vector<LineDetection> detectLinesHough(
         }
     }
 
+    // --- Peak Detection (Non-Maximum Suppression) ---
     std::vector<LineDetection> lines;
     for (int t = 0; t < thetaBins; ++t) {
         for (int r = 0; r < rhoBins; ++r) {
-            const int votes = accumulator[static_cast<size_t>(t * rhoBins + r)];
-            if (votes < voteThreshold) {
-                continue;
+            int idx = t * rhoBins + r;
+            int votes = accumulator[idx];
+            if (votes < voteThreshold) continue;
+
+            bool isPeak = true;
+            for (int dt = -1; dt <= 1; ++dt) {
+                for (int dr = -1; dr <= 1; ++dr) {
+                    if (dt == 0 && dr == 0) continue;
+                    int nt = t + dt, nr = r + dr;
+                    if (nt < 0) nt = thetaBins - 1; // Wrap theta
+                    if (nt >= thetaBins) nt = 0;
+                    if (nr < 0 || nr >= rhoBins) continue;
+
+                    if (accumulator[nt * rhoBins + nr] > votes) {
+                        isPeak = false; break;
+                    }
+                }
+                if (!isPeak) break;
             }
-            const double theta = (static_cast<double>(t) * thetaStepDegrees) * kPi / 180.0;
-            const double rho = (static_cast<double>(r) * rhoStep) - diag;
-            lines.push_back(LineDetection{rho, theta, votes});
+
+            if (isPeak) {
+                double theta = (t * thetaStepDegrees) * kPi / 180.0;
+                double rho = (r * rhoStep) - diag;
+                lines.push_back({rho, theta, votes});
+            }
         }
     }
 
@@ -90,6 +99,4 @@ std::vector<LineDetection> detectLinesHough(
     return lines;
 }
 
-
 } // namespace backend
-

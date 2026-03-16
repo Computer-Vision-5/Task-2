@@ -17,6 +17,7 @@ CTestTestfile.cmake
 *.suo
 *.opensdf
 *.sdf
+
 .idea
 # Qt
 *.user
