@@ -5,8 +5,9 @@
 #include <QMainWindow>
 #include <QPlainTextEdit>
 #include <QComboBox>
-#include <QDoubleSpinBox>
-#include <QSpinBox>
+#include <QDockWidget>
+#include <QSlider>
+#include <QLabel>
 
 #include "Image.hpp"
 
@@ -19,6 +20,7 @@ public:
 private slots:
     void onLoadImage();
     void onRunPipeline();
+    void onDetectionTypeChanged(int index);
 
 protected:
     void mouseDoubleClickEvent(QMouseEvent* event) override;
@@ -33,10 +35,13 @@ private:
     QLabel* fileLabel_ = nullptr;
     QPlainTextEdit* detectionsBox_ = nullptr;
     QComboBox* detectionTypeBox_ = nullptr;
-    QSpinBox* cannyKernelSizeSpin_ = nullptr;
-    QDoubleSpinBox* cannySigmaSpin_ = nullptr;
-    QDoubleSpinBox* cannyLowThresholdSpin_ = nullptr;
-    QDoubleSpinBox* cannyHighThresholdSpin_ = nullptr;
-    QSpinBox* houghLinesThresholdSpin_ = nullptr;
-    QSpinBox* houghCirclesThresholdSpin_ = nullptr;
+    QDockWidget* controlsDock_ = nullptr;
+    QSlider* cannyKernelSizeSlider_ = nullptr;
+    QSlider* cannySigmaSlider_ = nullptr;
+    QSlider* cannyLowThresholdSlider_ = nullptr;
+    QSlider* cannyHighThresholdSlider_ = nullptr;
+    QSlider* houghLinesThresholdSlider_ = nullptr;
+    QSlider* houghCirclesThresholdSlider_ = nullptr;
+    QWidget* houghLinesParamsWidget_ = nullptr;
+    QWidget* houghCirclesParamsWidget_ = nullptr;
 };

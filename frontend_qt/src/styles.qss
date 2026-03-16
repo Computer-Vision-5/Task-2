@@ -1,0 +1,252 @@
+/* ============================================================
+   Image Detection UI — Advanced Desktop Light Theme
+   Palette: warm white base, cool slate accents, crisp typography
+   ============================================================ */
+
+/* ── Global ── */
+QMainWindow, QWidget {
+    background-color: #f0f4f8;
+    color: #1e2d3d;
+    font-family: "Segoe UI", "SF Pro Text", "Helvetica Neue", sans-serif;
+    font-size: 13px;
+}
+
+/* ── Dock Widget (Sidebar) ── */
+QDockWidget {
+    background-color: #e8edf3;
+    border: none;
+}
+
+QDockWidget::title {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #dce4ed, stop:1 #cdd7e3);
+    color: #2e6da4;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 10px 14px;
+    border-bottom: 1px solid #b8c9d9;
+}
+
+QDockWidget > QWidget {
+    background-color: #e8edf3;
+}
+
+/* ── Scroll area ── */
+QScrollArea {
+    background-color: #e8edf3;
+    border: none;
+}
+
+QScrollBar:vertical {
+    background: #dce4ed;
+    width: 6px;
+    border-radius: 3px;
+}
+QScrollBar::handle:vertical {
+    background: #a8bece;
+    border-radius: 3px;
+    min-height: 24px;
+}
+QScrollBar::handle:vertical:hover {
+    background: #7aa2be;
+}
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical { height: 0px; }
+
+/* ── Title label ── */
+QLabel#titleLabel {
+    font-size: 20px;
+    font-weight: 700;
+    color: #1a5a8a;
+    letter-spacing: 0.3px;
+    padding: 10px 4px 6px 4px;
+    border-bottom: 2px solid #b8cfe0;
+}
+
+/* ── File label ── */
+QLabel#fileLabel {
+    background-color: #ffffff;
+    border: 1px solid #cad7e3;
+    border-radius: 6px;
+    color: #5a7a95;
+    font-size: 12px;
+    padding: 6px 10px;
+}
+
+/* ── Image panels ── */
+QLabel#imagePanel {
+    background-color: #ffffff;
+    border: 1px solid #c2d2df;
+    border-radius: 10px;
+    color: #8aaec4;
+    font-size: 13px;
+}
+
+/* ── Group boxes ── */
+QGroupBox {
+    background-color: #f7fafc;
+    border: 1px solid #c2d2df;
+    border-radius: 8px;
+    margin-top: 14px;
+    padding-top: 10px;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    left: 12px;
+    padding: 0 6px;
+    color: #2e6da4;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    background-color: #f7fafc;
+}
+
+/* ── Sidebar section labels ── */
+QLabel#sectionLabel {
+    color: #7a9db8;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 10px 0 4px 0;
+}
+
+QLabel#paramName {
+    color: #3a5a75;
+    font-size: 12px;
+    padding: 6px 0 2px 0;
+}
+
+QLabel#paramValue {
+    color: #1a6aaa;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 0 0 4px 0;
+    qproperty-alignment: AlignRight;
+}
+
+/* ── Sliders ── */
+QSlider::groove:horizontal {
+    height: 4px;
+    background: #ccd9e5;
+    border-radius: 2px;
+    margin: 0px;
+}
+
+QSlider::sub-page:horizontal {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 #4a9ad4, stop:1 #2e6da4);
+    border-radius: 2px;
+}
+
+QSlider::handle:horizontal {
+    background: #ffffff;
+    border: 2px solid #2e6da4;
+    width: 14px;
+    height: 14px;
+    margin: -5px 0;
+    border-radius: 7px;
+}
+
+QSlider::handle:horizontal:hover {
+    background: #e8f2fb;
+    border-color: #1a5a8a;
+}
+
+/* ── ComboBox ── */
+QComboBox {
+    background-color: #ffffff;
+    border: 1px solid #b8cad8;
+    border-radius: 6px;
+    padding: 6px 10px;
+    color: #1e2d3d;
+    font-size: 13px;
+    min-height: 28px;
+}
+
+QComboBox:hover {
+    border-color: #4a9ad4;
+}
+
+QComboBox:focus {
+    border-color: #2e6da4;
+}
+
+QComboBox::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 24px;
+    border-left: 1px solid #b8cad8;
+    border-top-right-radius: 6px;
+    border-bottom-right-radius: 6px;
+    background-color: #f0f6fb;
+}
+
+QComboBox::down-arrow {
+    width: 0;
+    height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid #2e6da4;
+}
+
+QComboBox QAbstractItemView {
+    background-color: #ffffff;
+    border: 1px solid #b8cad8;
+    border-radius: 6px;
+    selection-background-color: #ddeef8;
+    selection-color: #1a5a8a;
+    padding: 4px;
+    outline: none;
+}
+
+/* ── Action button ── */
+QPushButton#actionButton {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #4a9ad4, stop:1 #2e6da4);
+    border: 1px solid #2560a0;
+    border-radius: 8px;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 10px 16px;
+    letter-spacing: 0.4px;
+    min-height: 36px;
+}
+
+QPushButton#actionButton:hover {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #5aaae4, stop:1 #3a7dc4);
+    border-color: #1a5a8a;
+}
+
+QPushButton#actionButton:pressed {
+    background: #2560a0;
+    border-color: #1a4a78;
+}
+
+/* ── Report / log box ── */
+QPlainTextEdit#reportBox {
+    background-color: #ffffff;
+    border: 1px solid #c2d2df;
+    border-radius: 8px;
+    color: #2a4a65;
+    font-family: "Cascadia Code", "Fira Code", "Consolas", monospace;
+    font-size: 12px;
+    padding: 10px;
+    selection-background-color: #cce0f0;
+    selection-color: #1a3a5a;
+}
+
+/* ── Separator ── */
+QFrame#separator {
+    background-color: #c2d2df;
+    max-height: 1px;
+    margin: 6px 0;
+}
+

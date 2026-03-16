@@ -1,0 +1,44 @@
+# CMake
+build/
+cmake-build-debug/
+cmake-build-*/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
+CTestTestfile.cmake
+
+# Visual Studio
+.vs/
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.suo
+*.opensdf
+*.sdf
+
+# Qt
+*.user
+*.pro.user
+*_plugin_import.cpp
+
+# Binaries
+*.exe
+*.dll
+*.lib
+*.pdb
+*.a
+*.o
+*.so
+*.out
+
+# Log and temporary files
+*.log
+*.tmp
+*.temp
+
+# OS-specific
+.DS_Store
+Thumbs.db
+

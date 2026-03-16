@@ -38,6 +38,7 @@ if(ENABLE_QT_FRONTEND)
     add_executable(imgproc_qt
             frontend_qt/src/main.cpp
             frontend_qt/src/MainWindow.cpp
+            frontend_qt/src/resources.qrc
             # Note: Usually you don't list .hpp in add_executable,
             # but it helps CLion "see" them in the project tree.
             frontend_qt/src/MainWindow.hpp
