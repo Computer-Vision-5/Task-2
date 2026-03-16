@@ -1,0 +1,10 @@
+^C:\USERS\SHAMS\CLIONPROJECTS\UNTITLED4\BUILD\CMAKEFILES\A8244D248CFC15A3985B920E420078EE\GENERATE.STAMP.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SC:/Users/shams/CLionProjects/untitled4 -BC:/Users/shams/CLionProjects/untitled4/build --check-stamp-list CMakeFiles/generate.stamp.list --vs-solution-file C:/Users/shams/CLionProjects/untitled4/build/untitled4.slnx
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

@@ -1,0 +1,19 @@
+Start testing: Mar 16 01:09 Egypt Standard Time
+----------------------------------------------------------
+1/1 Testing: backend_smoke_test
+1/1 Test: backend_smoke_test
+Command: "C:/Users/shams/CLionProjects/untitled4/build/Debug/backend_smoke_test.exe"
+Directory: C:/Users/shams/CLionProjects/untitled4/build
+"backend_smoke_test" start time: Mar 16 01:09 Egypt Standard Time
+Output:
+----------------------------------------------------------
+Assertion failed: !circles.empty(), file C:\Users\shams\CLionProjects\untitled4\tests\backend_smoke_test.cpp, line 79
+<end of output>
+Test time =   9.37 sec
+----------------------------------------------------------
+Test Failed.
+"backend_smoke_test" end time: Mar 16 01:09 Egypt Standard Time
+"backend_smoke_test" time elapsed: 00:00:09
+----------------------------------------------------------
+
+End testing: Mar 16 01:09 Egypt Standard Time

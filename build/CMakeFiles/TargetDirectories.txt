@@ -1,0 +1,4 @@
+C:/Users/shams/CLionProjects/untitled4/build/CMakeFiles/imgproc_backend.dir
+C:/Users/shams/CLionProjects/untitled4/build/CMakeFiles/imgproc_runner.dir
+C:/Users/shams/CLionProjects/untitled4/build/CMakeFiles/ALL_BUILD.dir
+C:/Users/shams/CLionProjects/untitled4/build/CMakeFiles/ZERO_CHECK.dir
