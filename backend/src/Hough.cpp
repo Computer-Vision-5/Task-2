@@ -90,64 +90,6 @@ std::vector<LineDetection> detectLinesHough(
     return lines;
 }
 
-std::vector<CircleDetection> detectCirclesHough(
-    const GrayImage& edgeImage,
-    int minRadius,
-    int maxRadius,
-    int voteThreshold,
-    int maxCircles,
-    int angleStepDegrees) {
-    if (!edgeImage.isValid()) {
-        throw std::invalid_argument("Edge image is invalid");
-    }
-    if (minRadius <= 0 || maxRadius < minRadius || voteThreshold <= 0 || maxCircles <= 0 || angleStepDegrees <= 0) {
-        throw std::invalid_argument("Invalid Hough circle parameters");
-    }
-
-    const int width = edgeImage.width;
-    const int height = edgeImage.height;
-
-    std::vector<CircleDetection> circles;
-
-    std::vector<double> cosTable;
-    std::vector<double> sinTable;
-    for (int angle = 0; angle < 360; angle += angleStepDegrees) {
-        const double rad = static_cast<double>(angle) * kPi / 180.0;
-        cosTable.push_back(std::cos(rad));
-        sinTable.push_back(std::sin(rad));
-    }
-
-    for (int radius = minRadius; radius <= maxRadius; ++radius) {
-        std::vector<int> accumulator(static_cast<size_t>(width * height), 0);
-
-        for (int y = 0; y < height; ++y) {
-            for (int x = 0; x < width; ++x) {
-                if (!isEdgePixel(edgeImage, x, y)) {
-                    continue;
-                }
-                for (size_t i = 0; i < cosTable.size(); ++i) {
-                    const int cx = static_cast<int>(std::round(x - radius * cosTable[i]));
-                    const int cy = static_cast<int>(std::round(y - radius * sinTable[i]));
-                    if (cx >= 0 && cy >= 0 && cx < width && cy < height) {
-                        ++accumulator[static_cast<size_t>(cy * width + cx)];
-                    }
-                }
-            }
-        }
-
-        for (int cy = 0; cy < height; ++cy) {
-            for (int cx = 0; cx < width; ++cx) {
-                const int votes = accumulator[static_cast<size_t>(cy * width + cx)];
-                if (votes >= voteThreshold) {
-                    circles.push_back(CircleDetection{cx, cy, radius, votes});
-                }
-            }
-        }
-    }
-
-    keepTopByVotes(circles, maxCircles);
-    return circles;
-}
 
 } // namespace backend
 

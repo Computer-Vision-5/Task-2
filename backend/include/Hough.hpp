@@ -12,13 +12,6 @@ struct LineDetection {
     int votes = 0;
 };
 
-struct CircleDetection {
-    int centerX = 0;
-    int centerY = 0;
-    int radius = 0;
-    int votes = 0;
-};
-
 std::vector<LineDetection> detectLinesHough(
     const GrayImage& edgeImage,
     int voteThreshold,
@@ -26,13 +19,6 @@ std::vector<LineDetection> detectLinesHough(
     double thetaStepDegrees = 1.0,
     double rhoStep = 1.0);
 
-std::vector<CircleDetection> detectCirclesHough(
-    const GrayImage& edgeImage,
-    int minRadius,
-    int maxRadius,
-    int voteThreshold,
-    int maxCircles = 20,
-    int angleStepDegrees = 5);
 
 } // namespace backend
 

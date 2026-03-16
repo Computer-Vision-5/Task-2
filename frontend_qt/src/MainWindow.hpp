@@ -41,7 +41,5 @@ private:
     QSlider* cannyLowThresholdSlider_ = nullptr;
     QSlider* cannyHighThresholdSlider_ = nullptr;
     QSlider* houghLinesThresholdSlider_ = nullptr;
-    QSlider* houghCirclesThresholdSlider_ = nullptr;
     QWidget* houghLinesParamsWidget_ = nullptr;
-    QWidget* houghCirclesParamsWidget_ = nullptr;
 };
