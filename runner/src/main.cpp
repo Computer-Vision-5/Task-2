@@ -5,7 +5,6 @@
 
 #include "Canny.hpp"
 #include "Hough.hpp"
-#include "ImageIO.hpp"
 
 namespace {
 

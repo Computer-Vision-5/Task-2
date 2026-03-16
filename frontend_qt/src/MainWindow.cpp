@@ -20,7 +20,7 @@
 
 #include "Canny.hpp"
 #include "Hough.hpp"
-#include "ImageIO.hpp"
+
 
 // ── Helper: builds a labeled slider block (name / value on one row, slider below) ──
 static QWidget* makeSliderBlock(QWidget* parent,
@@ -242,7 +242,7 @@ void MainWindow::onLoadImage()
 {
     const QString path = QFileDialog::getOpenFileName(
         this, "Open image", {},
-        "Images (*.png *.jpg *.jpeg *.pgm *.ppm)");
+        "Images (*.png *.jpg *.jpeg)");
     if (path.isEmpty()) return;
 
     QImage qImage;

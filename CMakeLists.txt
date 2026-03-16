@@ -14,7 +14,6 @@ option(ENABLE_QT_FRONTEND "Build Qt frontend" ON)
 add_library(imgproc_backend
         backend/src/Canny.cpp
         backend/src/Hough.cpp
-        backend/src/ImageIO.cpp
 )
 
 target_include_directories(imgproc_backend
