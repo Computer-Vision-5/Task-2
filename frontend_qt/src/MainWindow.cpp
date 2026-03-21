@@ -108,7 +108,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 
     sideLayout->addWidget(makeSectionLabel("Detection Mode", scrollWidget));
     detectionTypeBox_ = new QComboBox(scrollWidget);
-    detectionTypeBox_->addItems({"All", "Edges", "Lines"});
+    // detectionTypeBox_->addItems({"All", "Edges", "Lines"});
+    detectionTypeBox_->addItems({"All", "Edges", "Lines", "Circles", "Ellipses"});
     sideLayout->addWidget(detectionTypeBox_);
 
     sideLayout->addSpacing(8);
@@ -156,6 +157,34 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
     sideLayout->addStretch();
     sideLayout->addWidget(makeSeparator(scrollWidget));
     sideLayout->addSpacing(8);
+
+
+
+
+
+// --- Circles UI ---
+    houghCirclesParamsWidget_ = new QGroupBox("Hough Circles", scrollWidget);
+    auto* circlesLayout = new QVBoxLayout(houghCirclesParamsWidget_);
+    circlesLayout->setSpacing(6);
+    QLabel* dC1 = nullptr; QLabel* dC2 = nullptr; QLabel* dC3 = nullptr;
+    circlesLayout->addWidget(makeSliderBlock(static_cast<QGroupBox*>(houghCirclesParamsWidget_), "Threshold", houghCirclesThresholdSlider_, dC1, 1, 500, 80));
+    circlesLayout->addWidget(makeSliderBlock(static_cast<QGroupBox*>(houghCirclesParamsWidget_), "Min Radius", houghCirclesMinRSlider_, dC2, 5, 200, 15));
+    circlesLayout->addWidget(makeSliderBlock(static_cast<QGroupBox*>(houghCirclesParamsWidget_), "Max Radius", houghCirclesMaxRSlider_, dC3, 10, 300, 60));
+    sideLayout->addWidget(houghCirclesParamsWidget_);
+
+    // --- Ellipses UI ---
+    houghEllipsesParamsWidget_ = new QGroupBox("Hough Ellipses", scrollWidget);
+    auto* ellipsesLayout = new QVBoxLayout(houghEllipsesParamsWidget_);
+    ellipsesLayout->setSpacing(6);
+    QLabel* dE1 = nullptr; QLabel* dE2 = nullptr; QLabel* dE3 = nullptr;
+    ellipsesLayout->addWidget(makeSliderBlock(static_cast<QGroupBox*>(houghEllipsesParamsWidget_), "Threshold", houghEllipsesThresholdSlider_, dE1, 1, 500, 60));
+    ellipsesLayout->addWidget(makeSliderBlock(static_cast<QGroupBox*>(houghEllipsesParamsWidget_), "Min Axis", houghEllipsesMinASlider_, dE2, 10, 100, 20));
+    ellipsesLayout->addWidget(makeSliderBlock(static_cast<QGroupBox*>(houghEllipsesParamsWidget_), "Max Axis", houghEllipsesMaxASlider_, dE3, 20, 200, 80));
+    sideLayout->addWidget(houghEllipsesParamsWidget_);
+
+
+
+
 
     auto* runButton = new QPushButton("⚡  Process Image", scrollWidget);
     runButton->setObjectName("actionButton");
@@ -238,6 +267,11 @@ void MainWindow::setStatusText(const QString& text)
 }
 
 // ─────────────────────────────────────────────────────────────
+
+
+
+
+
 void MainWindow::onLoadImage()
 {
     const QString path = QFileDialog::getOpenFileName(
@@ -249,6 +283,14 @@ void MainWindow::onLoadImage()
     if (!qImage.load(path)) {
         QMessageBox::critical(this, "Load failed", "Failed to load image file.");
         return;
+    }
+
+    // ---------------------------------------------------------
+    // NEW FIX: Shrink massive images down to a manageable size 
+    // before passing them to the heavy math algorithms!
+    // ---------------------------------------------------------
+    if (qImage.width() > 800 || qImage.height() > 800) {
+        qImage = qImage.scaled(800, 800, Qt::KeepAspectRatio, Qt::SmoothTransformation);
     }
 
     image_ = backend::GrayImage(qImage.width(), qImage.height());
@@ -263,6 +305,37 @@ void MainWindow::onLoadImage()
     fileLabel_->setText("Loaded: " + path);
     setStatusText("Image loaded. Press 'Process Image' to run the pipeline.");
 }
+
+
+
+
+
+
+// void MainWindow::onLoadImage()
+// {
+//     const QString path = QFileDialog::getOpenFileName(
+//         this, "Open image", {},
+//         "Images (*.png *.jpg *.jpeg)");
+//     if (path.isEmpty()) return;
+
+//     QImage qImage;
+//     if (!qImage.load(path)) {
+//         QMessageBox::critical(this, "Load failed", "Failed to load image file.");
+//         return;
+//     }
+
+//     image_ = backend::GrayImage(qImage.width(), qImage.height());
+//     for (int y = 0; y < qImage.height(); ++y)
+//         for (int x = 0; x < qImage.width(); ++x)
+//             image_.at(x, y) = qGray(qImage.pixel(x, y));
+
+//     const QPixmap pix = QPixmap::fromImage(qImage)
+//         .scaled(inputLabel_->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
+//     inputLabel_->setPixmap(pix);
+//     edgesLabel_->setText("Output will appear here");
+//     fileLabel_->setText("Loaded: " + path);
+//     setStatusText("Image loaded. Press 'Process Image' to run the pipeline.");
+// }
 
 // ─────────────────────────────────────────────────────────────
 // Extracts true line segments from a Hough-detected infinite line.
@@ -416,6 +489,57 @@ void MainWindow::onRunPipeline()
             }
         }
 
+
+
+
+// --- Add this block underneath your Lines drawing logic in onRunPipeline ---
+
+        if (detectionType == "All" || detectionType == "Circles") {
+            const auto circles = backend::detectCirclesHough(
+                edges, 
+                houghCirclesMinRSlider_->value(), 
+                houghCirclesMaxRSlider_->value(), 
+                houghCirclesThresholdSlider_->value());
+
+            report << "\nCircles found: " << circles.size() << "\n";
+            painter.setPen(QPen(QColor(50, 255, 50), 2)); // Green for Circles
+
+            for (std::size_t i = 0; i < circles.size(); ++i) {
+                const auto& c = circles[i];
+                report << "  C" << (i + 1) << ": center=(" << c.centerX << "," << c.centerY 
+                       << ") r=" << c.radius << " votes=" << c.votes << "\n";
+                painter.drawEllipse(QPoint(c.centerX, c.centerY), c.radius, c.radius);
+            }
+        }
+
+        if (detectionType == "All" || detectionType == "Ellipses") {
+            // Using Min Axis and Max Axis for both width and height bounds to keep UI clean
+            int minA = houghEllipsesMinASlider_->value();
+            int maxA = houghEllipsesMaxASlider_->value();
+            
+            const auto ellipses = backend::detectEllipsesHough(
+                edges, minA, maxA, minA, maxA, houghEllipsesThresholdSlider_->value());
+
+            report << "\nEllipses found: " << ellipses.size() << "\n";
+            painter.setPen(QPen(QColor(50, 100, 255), 2)); // Blue for Ellipses
+
+            for (std::size_t i = 0; i < ellipses.size(); ++i) {
+                const auto& e = ellipses[i];
+                report << "  E" << (i + 1) << ": center=(" << e.centerX << "," << e.centerY 
+                       << ") a=" << e.a << " b=" << e.b << " angle=" << (e.angle * 180.0 / M_PI) << "°\n";
+                
+                // Qt requires translating and rotating the coordinate system to draw angled ellipses
+                painter.save();
+                painter.translate(e.centerX, e.centerY);
+                painter.rotate(e.angle * 180.0 / M_PI);
+                painter.drawEllipse(QPoint(0, 0), e.a, e.b);
+                painter.restore();
+            }
+        }
+
+
+
+
         report << "\nTotal drawn segments: " << totalSegments;
 
         edgesLabel_->setPixmap(
@@ -435,10 +559,19 @@ void MainWindow::mouseDoubleClickEvent(QMouseEvent* event)
         onLoadImage();
 }
 
+// void MainWindow::onDetectionTypeChanged(int index)
+// {
+//     const QString t = detectionTypeBox_->itemText(index);
+//     houghLinesParamsWidget_->setVisible(t == "All" || t == "Lines");
+// }
+
+
 void MainWindow::onDetectionTypeChanged(int index)
 {
     const QString t = detectionTypeBox_->itemText(index);
     houghLinesParamsWidget_->setVisible(t == "All" || t == "Lines");
+    houghCirclesParamsWidget_->setVisible(t == "All" || t == "Circles");
+    houghEllipsesParamsWidget_->setVisible(t == "All" || t == "Ellipses");
 }
 
 

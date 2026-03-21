@@ -4,9 +4,10 @@ project(untitled4 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
 
-# 1. Point CMake to your specific Qt installation
-set(CMAKE_PREFIX_PATH "C:/Qt/6.10.2/mingw_64")
+# 1. Point CMake to your MSYS2 MinGW64 Qt installation
+set(CMAKE_PREFIX_PATH "C:/msys64/mingw64")
 
 option(ENABLE_QT_FRONTEND "Build Qt frontend" ON)
 
@@ -21,9 +22,9 @@ target_include_directories(imgproc_backend
         ${CMAKE_CURRENT_SOURCE_DIR}/backend/include
 )
 
-# CLI Runner (Console App)
-add_executable(imgproc_runner runner/src/main.cpp)
-target_link_libraries(imgproc_runner PRIVATE imgproc_backend)
+# CLI Runner (Commented out for now so it doesn't block the UI build)
+# add_executable(imgproc_runner runner/src/main.cpp)
+# target_link_libraries(imgproc_runner PRIVATE imgproc_backend)
 
 # GUI App (Qt)
 if(ENABLE_QT_FRONTEND)
@@ -31,15 +32,12 @@ if(ENABLE_QT_FRONTEND)
     set(CMAKE_AUTOUIC ON)
     set(CMAKE_AUTORCC ON)
 
-    # Since you know you have Qt6, we can look for it directly
     find_package(Qt6 REQUIRED COMPONENTS Widgets)
 
     add_executable(imgproc_qt
             frontend_qt/src/main.cpp
             frontend_qt/src/MainWindow.cpp
             frontend_qt/src/resources.qrc
-            # Note: Usually you don't list .hpp in add_executable,
-            # but it helps CLion "see" them in the project tree.
             frontend_qt/src/MainWindow.hpp
     )
 

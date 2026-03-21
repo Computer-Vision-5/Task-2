@@ -1,3 +1,0 @@
-backend_smoke_test 0 0
----
-backend_smoke_test

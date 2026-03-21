@@ -49,3 +49,6 @@ This project is a C++ application with a Qt frontend that performs image process
 5.  Click the "Detect Edges / Lines / Circles" button to run the pipeline.
 6.  The results will be displayed in the right-hand panel, and a summary will be shown in the text box below.
 
+
+
+

@@ -1,4 +1,6 @@
-C:/Users/shams/CLionProjects/untitled4/build/CMakeFiles/imgproc_backend.dir
-C:/Users/shams/CLionProjects/untitled4/build/CMakeFiles/imgproc_runner.dir
-C:/Users/shams/CLionProjects/untitled4/build/CMakeFiles/ALL_BUILD.dir
-C:/Users/shams/CLionProjects/untitled4/build/CMakeFiles/ZERO_CHECK.dir
+D:/badawy/Task-2/build/CMakeFiles/imgproc_backend.dir
+D:/badawy/Task-2/build/CMakeFiles/imgproc_qt.dir
+D:/badawy/Task-2/build/CMakeFiles/edit_cache.dir
+D:/badawy/Task-2/build/CMakeFiles/rebuild_cache.dir
+D:/badawy/Task-2/build/CMakeFiles/imgproc_qt_autogen_timestamp_deps.dir
+D:/badawy/Task-2/build/CMakeFiles/imgproc_qt_autogen.dir
