@@ -14,7 +14,8 @@ option(ENABLE_QT_FRONTEND "Build Qt frontend" ON)
 add_library(imgproc_backend
         backend/src/Canny.cpp
         backend/src/Hough.cpp
-        backend/src/ImageIO.cpp
+        backend/src/Image.cpp
+        backend/src/Snake.cpp
 )
 
 target_include_directories(imgproc_backend
@@ -32,17 +33,14 @@ if(ENABLE_QT_FRONTEND)
     set(CMAKE_AUTOUIC ON)
     set(CMAKE_AUTORCC ON)
 
-    # Since you know you have Qt6, we can look for it directly
-    find_package(Qt6 REQUIRED COMPONENTS Widgets)
+    find_package(Qt6 REQUIRED COMPONENTS Widgets Concurrent)
 
     add_executable(imgproc_qt
             frontend_qt/src/main.cpp
             frontend_qt/src/MainWindow.cpp
             frontend_qt/src/resources.qrc
-            # Note: Usually you don't list .hpp in add_executable,
-            # but it helps CLion "see" them in the project tree.
             frontend_qt/src/MainWindow.hpp
     )
 
-    target_link_libraries(imgproc_qt PRIVATE imgproc_backend Qt6::Widgets)
+    target_link_libraries(imgproc_qt PRIVATE imgproc_backend Qt6::Widgets Qt6::Concurrent)
 endif()

@@ -1,5 +1,6 @@
 #include "MainWindow.hpp"
 
+#include <QEvent>
 #include <QFile>
 #include <QFileDialog>
 #include <QFrame>
@@ -12,6 +13,7 @@
 #include <QScrollArea>
 #include <QVBoxLayout>
 #include <QWidget>
+#include <QtConcurrent/QtConcurrent>
 
 #include <algorithm>
 #include <cmath>
@@ -20,15 +22,15 @@
 
 #include "Canny.hpp"
 #include "Hough.hpp"
-#include "ImageIO.hpp"
+#include "Snake.hpp"
 
-// ── Helper: builds a labeled slider block (name / value on one row, slider below) ──
+// ── Helper: builds a labeled slider block ────────────────────────────────────
 static QWidget* makeSliderBlock(QWidget* parent,
-                                 const QString& name,
-                                 QSlider*& sliderOut,
-                                 QLabel*&  valueOut,
-                                 int min, int max, int initial,
-                                 std::function<QString(int)> formatter = nullptr)
+                                const QString& name,
+                                QSlider*& sliderOut,
+                                QLabel*&  valueOut,
+                                int min, int max, int initial,
+                                std::function<QString(int)> formatter = nullptr)
 {
     auto* block  = new QWidget(parent);
     auto* layout = new QVBoxLayout(block);
@@ -81,7 +83,9 @@ static QLabel* makeSectionLabel(const QString& text, QWidget* parent)
     return lbl;
 }
 
-// ─────────────────────────────────────────────────────────────
+// =============================================================================
+// Constructor
+// =============================================================================
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 {
     QFile qssFile(":/styles.qss");
@@ -96,6 +100,12 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
         }
     }
 
+    // Async watcher — fires onProcessingFinished() in the main thread when done
+    watcher_ = new QFutureWatcher<PipelineResult>(this);
+    connect(watcher_, &QFutureWatcher<PipelineResult>::finished,
+            this,     &MainWindow::onProcessingFinished);
+
+    // ── Dock / Controls ───────────────────────────────────────────────────
     controlsDock_ = new QDockWidget("Controls", this);
     controlsDock_->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
     controlsDock_->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
@@ -106,14 +116,16 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
     sideLayout->setContentsMargins(14, 14, 14, 14);
     sideLayout->setSpacing(6);
 
+    // ── Detection mode selector ───────────────────────────────────────────
     sideLayout->addWidget(makeSectionLabel("Detection Mode", scrollWidget));
     detectionTypeBox_ = new QComboBox(scrollWidget);
-    detectionTypeBox_->addItems({"All", "Edges", "Lines"});
+    detectionTypeBox_->addItems({"All", "Edges", "Lines", "Snake"});
     sideLayout->addWidget(detectionTypeBox_);
 
     sideLayout->addSpacing(8);
     sideLayout->addWidget(makeSeparator(scrollWidget));
 
+    // ── Canny group ───────────────────────────────────────────────────────
     auto* cannyGroup  = new QGroupBox("Canny Edge Detection", scrollWidget);
     auto* cannyLayout = new QVBoxLayout(cannyGroup);
     cannyLayout->setSpacing(6);
@@ -142,6 +154,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
     sideLayout->addWidget(cannyGroup);
     sideLayout->addSpacing(4);
 
+    // ── Hough Lines group ─────────────────────────────────────────────────
     houghLinesParamsWidget_ = new QGroupBox("Hough Lines", scrollWidget);
     auto* linesLayout = new QVBoxLayout(houghLinesParamsWidget_);
     linesLayout->setSpacing(6);
@@ -153,13 +166,64 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
     sideLayout->addWidget(houghLinesParamsWidget_);
     sideLayout->addSpacing(4);
 
+    // ── Snake group ───────────────────────────────────────────────────────
+    snakeParamsWidget_ = new QGroupBox("Active Contour (Snake)", scrollWidget);
+    auto* snakeLayout  = new QVBoxLayout(snakeParamsWidget_);
+    snakeLayout->setSpacing(6);
+
+    QLabel *ds1=nullptr, *ds2=nullptr, *ds3=nullptr, *ds4=nullptr, *ds5=nullptr, *ds6=nullptr;
+
+    snakeLayout->addWidget(
+        makeSliderBlock(static_cast<QGroupBox*>(snakeParamsWidget_),
+                        "a  Elasticity", snakeAlphaSlider_, ds1,
+                        0, 100, 40,
+                        [](int v){ return QString::number(v / 100.0, 'f', 2); }));
+
+    snakeLayout->addWidget(
+        makeSliderBlock(static_cast<QGroupBox*>(snakeParamsWidget_),
+                        "b  Smoothness", snakeBetaSlider_, ds2,
+                        0, 100, 40,
+                        [](int v){ return QString::number(v / 100.0, 'f', 2); }));
+
+    snakeLayout->addWidget(
+        makeSliderBlock(static_cast<QGroupBox*>(snakeParamsWidget_),
+                        "Window W", snakeWindowSlider_, ds3,
+                        1, 20, 5));
+
+    snakeLayout->addWidget(
+        makeSliderBlock(static_cast<QGroupBox*>(snakeParamsWidget_),
+                        "Contour Points", snakeNumPointsSlider_, ds4,
+                        10, 200, 60));
+
+    snakeLayout->addWidget(
+        makeSliderBlock(static_cast<QGroupBox*>(snakeParamsWidget_),
+                        "Max Iterations", snakeMaxIterSlider_, ds5,
+                        10, 500, 200));
+
+    snakeLayout->addWidget(
+        makeSliderBlock(static_cast<QGroupBox*>(snakeParamsWidget_),
+                        "Convergence x0.01", snakeThresholdSlider_, ds6,
+                        1, 200, 50,
+                        [](int v){ return QString::number(v / 100.0, 'f', 2); }));
+
+    auto* hintLabel = new QLabel(
+        "<i>Click &amp; drag on the left image<br>to place the initial circle.</i>",
+        snakeParamsWidget_);
+    hintLabel->setWordWrap(true);
+    hintLabel->setObjectName("paramName");
+    snakeLayout->addWidget(hintLabel);
+
+    sideLayout->addWidget(snakeParamsWidget_);
+    sideLayout->addSpacing(4);
+
+    // ── Bottom bar ────────────────────────────────────────────────────────
     sideLayout->addStretch();
     sideLayout->addWidget(makeSeparator(scrollWidget));
     sideLayout->addSpacing(8);
 
-    auto* runButton = new QPushButton("⚡  Process Image", scrollWidget);
-    runButton->setObjectName("actionButton");
-    sideLayout->addWidget(runButton);
+    processButton_ = new QPushButton("  Process Image", scrollWidget);
+    processButton_->setObjectName("actionButton");
+    sideLayout->addWidget(processButton_);
 
     scrollWidget->setLayout(sideLayout);
     scrollArea->setWidget(scrollWidget);
@@ -175,6 +239,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
             this, &MainWindow::onDetectionTypeChanged);
     onDetectionTypeChanged(0);
 
+    // ── Central area ──────────────────────────────────────────────────────
     auto* central    = new QWidget(this);
     auto* mainLayout = new QVBoxLayout(central);
     mainLayout->setContentsMargins(16, 8, 16, 10);
@@ -184,7 +249,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
     title->setObjectName("titleLabel");
     mainLayout->addWidget(title);
 
-    fileLabel_ = new QLabel("No image loaded — double-click a panel to open", central);
+    fileLabel_ = new QLabel("No image loaded -- double-click a panel to open", central);
     fileLabel_->setObjectName("fileLabel");
     fileLabel_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     mainLayout->addWidget(fileLabel_);
@@ -208,7 +273,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 
     detectionsBox_ = new QPlainTextEdit(central);
     detectionsBox_->setReadOnly(true);
-    detectionsBox_->setPlaceholderText("Detection results will appear here after processing…");
+    detectionsBox_->setPlaceholderText("Detection results will appear here after processing...");
     detectionsBox_->setObjectName("reportBox");
     detectionsBox_->setMaximumHeight(160);
     mainLayout->addWidget(detectionsBox_);
@@ -217,10 +282,15 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
     setWindowTitle("Image Detection UI");
     resize(1100, 780);
 
-    connect(runButton, &QPushButton::clicked, this, &MainWindow::onRunPipeline);
+    connect(processButton_, &QPushButton::clicked, this, &MainWindow::onRunPipeline);
+
+    // Intercept mouse on input label for snake circle placement
+    inputLabel_->installEventFilter(this);
 }
 
-// ─────────────────────────────────────────────────────────────
+// =============================================================================
+// Helpers
+// =============================================================================
 QImage MainWindow::toQImage(const backend::GrayImage& image)
 {
     QImage out(image.width, image.height, QImage::Format_Grayscale8);
@@ -237,12 +307,14 @@ void MainWindow::setStatusText(const QString& text)
     detectionsBox_->setPlainText(text);
 }
 
-// ─────────────────────────────────────────────────────────────
+// =============================================================================
+// Image loading
+// =============================================================================
 void MainWindow::onLoadImage()
 {
     const QString path = QFileDialog::getOpenFileName(
         this, "Open image", {},
-        "Images (*.png *.jpg *.jpeg *.pgm *.ppm)");
+        "Images (*.png *.jpg *.jpeg)");
     if (path.isEmpty()) return;
 
     QImage qImage;
@@ -256,179 +328,466 @@ void MainWindow::onLoadImage()
         for (int x = 0; x < qImage.width(); ++x)
             image_.at(x, y) = qGray(qImage.pixel(x, y));
 
+    // Reset snake state when a new image is loaded
+    snakeRadius_ = 0.0f;
+    snakeContour_.clear();
+    gradientMag_ = backend::GrayImage{};
+
     const QPixmap pix = QPixmap::fromImage(qImage)
         .scaled(inputLabel_->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
     inputLabel_->setPixmap(pix);
+    snakeOverlayPixmap_ = pix;   // keep a clean copy for overlay updates
+
     edgesLabel_->setText("Output will appear here");
     fileLabel_->setText("Loaded: " + path);
     setStatusText("Image loaded. Press 'Process Image' to run the pipeline.");
 }
 
-// ─────────────────────────────────────────────────────────────
-// Extracts true line segments from a Hough-detected infinite line.
+// =============================================================================
+// TASK 1 FIX — Event filter for snake circle placement
 //
-// Algorithm:
-//   1. Parameterise the infinite line by arc-length t along its direction
-//      vector (perpDir rotated 90°).  Every edge pixel close to the line
-//      gets projected onto that 1-D axis → a scalar t value.
-//   2. Sort those t-values and scan for *contiguous runs* (gap ≤ maxGap).
-//   3. Only keep runs whose projected length ≥ minSegmentLen pixels.
-//   4. Convert each run's (t_start, t_end) back to image (x,y) coordinates.
+// Root cause of the original bug:
+//   snakePressPos_ is in *label-widget* space.  The pixmap is displayed
+//   centred inside the label (Qt::AlignCenter), so its top-left corner sits at
+//   an offset (ox, oy) relative to the label origin.  QPainter on the pixmap
+//   uses pixmap-local coordinates — origin at the pixmap's own top-left.
+//   Passing snakePressPos_ directly to drawEllipse() therefore shifts every
+//   drawn circle by exactly (ox, oy) relative to what the user intended.
 //
-// This guarantees that each drawn segment corresponds exactly to where edge
-// pixels actually exist — no "bridging" across large blank regions.
-// ─────────────────────────────────────────────────────────────
+// Fix:
+//   Introduce labelToPixmap() that subtracts (ox, oy) before any QPainter
+//   call.  labelToImage() (for storing snakeCenter_) subtracts the offset AND
+//   then scales by the pixmap→image scale factor — exactly as before but now
+//   the scaling is correctly done around the pixmap origin.
+// =============================================================================
+bool MainWindow::eventFilter(QObject* watched, QEvent* event)
+{
+    if (watched != inputLabel_)
+        return QMainWindow::eventFilter(watched, event);
+
+    if (detectionTypeBox_->currentText() != "Snake")
+        return QMainWindow::eventFilter(watched, event);
+
+    if (!image_.isValid())
+        return QMainWindow::eventFilter(watched, event);
+
+    // ── Coordinate helpers ────────────────────────────────────────────────
+    //
+    // The pixmap is drawn centred inside the label.  Its top-left corner is at
+    //   ox = (label.width  - pixmap.width ) / 2
+    //   oy = (label.height - pixmap.height) / 2
+    // in label-local coordinates.
+    //
+    // labelToPixmap : label-coords  --> pixmap-local coords (for QPainter)
+    // labelToImage  : label-coords  --> original image coords (for snake algorithm)
+    // labelDeltaToImage : delta in label-coords --> delta in image coords (for radius)
+
+    auto pixmapOffset = [this]() -> QPointF {
+        const QPixmap& pm = inputLabel_->pixmap();
+        const QSize    ls = inputLabel_->size();
+        return { static_cast<double>((ls.width()  - pm.width())  / 2),
+                 static_cast<double>((ls.height() - pm.height()) / 2) };
+    };
+
+    auto labelToPixmap = [&](const QPointF& lp) -> QPointF {
+        const QPointF off = pixmapOffset();
+        return { lp.x() - off.x(), lp.y() - off.y() };
+    };
+
+    auto labelToImage = [&](const QPointF& lp) -> QPointF {
+        const QPixmap& pm = inputLabel_->pixmap();
+        const QPointF  pp = labelToPixmap(lp);   // pixmap-local
+        const double scaleX = static_cast<double>(image_.width)  / pm.width();
+        const double scaleY = static_cast<double>(image_.height) / pm.height();
+        return { pp.x() * scaleX, pp.y() * scaleY };
+    };
+
+    // Radius is a distance — no offset subtraction needed, only scaling.
+    // Use the X scale (image is not stretched; KeepAspectRatio guarantees
+    // scaleX == scaleY when the image fills the pixmap without distortion).
+    auto labelRadiusToImage = [&](double r) -> double {
+        const QPixmap& pm = inputLabel_->pixmap();
+        const double scaleX = static_cast<double>(image_.width) / pm.width();
+        return r * scaleX;
+    };
+
+    // ── Mouse events ──────────────────────────────────────────────────────
+    if (event->type() == QEvent::MouseButtonPress) {
+        auto* me = static_cast<QMouseEvent*>(event);
+        if (me->button() == Qt::LeftButton) {
+            snakePressPos_ = me->position();   // stored in label-coords
+            snakePlacing_  = true;
+            return true;
+        }
+    }
+
+    if (event->type() == QEvent::MouseMove && snakePlacing_) {
+        auto* me = static_cast<QMouseEvent*>(event);
+        const QPointF cur = me->position();
+        const double  dx  = cur.x() - snakePressPos_.x();
+        const double  dy  = cur.y() - snakePressPos_.y();
+        const double  r   = std::sqrt(dx*dx + dy*dy);
+
+        // Convert press position from label-coords to pixmap-local coords
+        // before handing it to QPainter (which operates in pixmap space).
+        const QPointF pmCenter = labelToPixmap(snakePressPos_);
+
+        QPixmap overlay = snakeOverlayPixmap_;
+        QPainter p(&overlay);
+        p.setRenderHint(QPainter::Antialiasing);
+        p.setPen(QPen(QColor(0, 220, 255), 2, Qt::DashLine));
+        p.drawEllipse(pmCenter, r, r);   // r stays the same: pixmap-scale == label-scale
+        inputLabel_->setPixmap(overlay);
+        return true;
+    }
+
+    if (event->type() == QEvent::MouseButtonRelease && snakePlacing_) {
+        auto* me = static_cast<QMouseEvent*>(event);
+        const QPointF cur = me->position();
+        const double  dx  = cur.x() - snakePressPos_.x();
+        const double  dy  = cur.y() - snakePressPos_.y();
+        const double  r   = std::sqrt(dx*dx + dy*dy);
+
+        snakePlacing_ = false;
+
+        if (r < 3.0) return true;   // too small — ignore
+
+        // Store in image space (for the algorithm)
+        snakeCenter_ = labelToImage(snakePressPos_);
+        snakeRadius_ = static_cast<float>(labelRadiusToImage(r));
+
+        // Draw the confirmed circle on the pixmap using pixmap-local coordinates
+        const QPointF pmCenter = labelToPixmap(snakePressPos_);
+        QPixmap overlay = snakeOverlayPixmap_;
+        QPainter p(&overlay);
+        p.setRenderHint(QPainter::Antialiasing);
+        p.setPen(QPen(QColor(0, 220, 255), 2));
+        p.drawEllipse(pmCenter, r, r);
+        inputLabel_->setPixmap(overlay);
+
+        setStatusText(
+            QString("Snake circle set -- centre (%.0f, %.0f), radius %.0f px in image space. "
+                    "Press 'Process Image' to evolve.")
+                .arg(snakeCenter_.x())
+                .arg(snakeCenter_.y())
+                .arg(snakeRadius_));
+        return true;
+    }
+
+    return QMainWindow::eventFilter(watched, event);
+}
+
+// =============================================================================
+// Hough helper -- unchanged from original
+// =============================================================================
 static std::vector<std::pair<QPoint, QPoint>> extractLineSegments(
     const backend::GrayImage& edges,
-    double rho,
-    double theta,
-    double distTolerance = 1.5,  // pixels away from ideal line
-    double maxGap        = 8.0,  // max blank gap still considered same segment
-    double minSegmentLen = 15.0) // minimum segment length to draw
+    double rho, double theta,
+    double distTolerance = 1.5,
+    double maxGap        = 8.0,
+    double minSegmentLen = 15.0)
 {
-    // Direction along the line (unit vector tangent to it)
-    const double dx =  std::sin(theta);   // perpendicular to normal → tangent
+    const double dx =  std::sin(theta);
     const double dy = -std::cos(theta);
-
-    // A point on the ideal infinite line
     const double ox = rho * std::cos(theta);
     const double oy = rho * std::sin(theta);
 
-    // Collect the 1-D projection (t) of every qualifying edge pixel
     std::vector<double> tValues;
     tValues.reserve(512);
 
     for (int y = 0; y < edges.height; ++y) {
         for (int x = 0; x < edges.width; ++x) {
-            if (edges.at(x, y) < 128.0f) continue;   // not an edge pixel
-
-            // Signed distance from pixel to the ideal line: n·p - rho
+            if (edges.at(x, y) < 128.0f) continue;
             const double dist = std::cos(theta) * x + std::sin(theta) * y - rho;
             if (std::abs(dist) > distTolerance) continue;
-
-            // Project onto tangent to get arc-length position
             const double t = dx * (x - ox) + dy * (y - oy);
             tValues.push_back(t);
         }
     }
 
-    if (tValues.empty())
-        return {};
-
+    if (tValues.empty()) return {};
     std::sort(tValues.begin(), tValues.end());
 
-    // Scan for contiguous runs separated by at most maxGap
     std::vector<std::pair<QPoint, QPoint>> segments;
     double segStart = tValues.front();
     double segEnd   = tValues.front();
 
     auto tToPoint = [&](double t) -> QPoint {
-        return QPoint(
-            static_cast<int>(std::round(ox + t * dx)),
-            static_cast<int>(std::round(oy + t * dy)));
+        return QPoint(static_cast<int>(std::round(ox + t * dx)),
+                      static_cast<int>(std::round(oy + t * dy)));
     };
 
     for (std::size_t i = 1; i < tValues.size(); ++i) {
         const double gap = tValues[i] - tValues[i - 1];
         if (gap <= maxGap) {
-            // Extend current segment
             segEnd = tValues[i];
         } else {
-            // Gap too large → close current segment, start a new one
             if (segEnd - segStart >= minSegmentLen)
                 segments.emplace_back(tToPoint(segStart), tToPoint(segEnd));
             segStart = tValues[i];
             segEnd   = tValues[i];
         }
     }
-    // Don't forget the last run
     if (segEnd - segStart >= minSegmentLen)
         segments.emplace_back(tToPoint(segStart), tToPoint(segEnd));
 
     return segments;
 }
 
-// ─────────────────────────────────────────────────────────────
+// =============================================================================
+// TASK 3 — Async pipeline
+//
+// onRunPipeline() captures all parameters and image data by value, then
+// launches a background task via QtConcurrent::run.  The task returns a
+// PipelineResult struct.  onProcessingFinished() (called in the main thread by
+// the QFutureWatcher) applies the result to the UI widgets.
+//
+// No UI widget is touched from the worker thread.
+// =============================================================================
 void MainWindow::onRunPipeline()
 {
     if (!image_.isValid()) {
         QMessageBox::information(this, "No image", "Please upload an image first.");
         return;
     }
+    if (watcher_->isRunning()) return;   // already processing
 
-    try {
-        // ── Canny ──────────────────────────────────────────────
-        backend::CannyParams cannyParams;
+    // ── Snapshot all UI-derived parameters NOW (main thread) ─────────────
+    const QString detectionType = detectionTypeBox_->currentText();
+
+    backend::CannyParams cannyParams;
+    {
         int kernelSize = cannyKernelSizeSlider_->value();
-        if (kernelSize % 2 == 0) ++kernelSize;          // must be odd
+        if (kernelSize % 2 == 0) ++kernelSize;
         cannyParams.gaussianKernelSize = kernelSize;
         cannyParams.gaussianSigma      = cannySigmaSlider_->value() / 10.0;
         cannyParams.lowThreshold       = cannyLowThresholdSlider_->value();
         cannyParams.highThreshold      = cannyHighThresholdSlider_->value();
+    }
 
-        const backend::GrayImage edges = backend::cannyEdgeDetect(image_, cannyParams);
+    const int    houghThreshold = houghLinesThresholdSlider_->value();
 
-        const QString detectionType = detectionTypeBox_->currentText();
+    backend::SnakeParams snakeParams;
+    snakeParams.alpha                = snakeAlphaSlider_->value()     / 100.0f;
+    snakeParams.beta                 = snakeBetaSlider_->value()      / 100.0f;
+    snakeParams.windowSize           = snakeWindowSlider_->value();
+    snakeParams.numPoints            = snakeNumPointsSlider_->value();
+    snakeParams.maxIterations        = snakeMaxIterSlider_->value();
+    snakeParams.convergenceThreshold = snakeThresholdSlider_->value() / 100.0f;
 
-        // ── Edges-only mode ────────────────────────────────────
-        if (detectionType == "Edges") {
-            edgesLabel_->setPixmap(
-                QPixmap::fromImage(toQImage(edges))
-                    .scaled(edgesLabel_->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
-            setStatusText("Canny edge detection complete.");
-            return;
+    // Capture by value so the lambda is self-contained
+    const backend::GrayImage  imageCopy       = image_;
+    const float               snakeRadius     = snakeRadius_;
+    const QPointF             snakeCenter     = snakeCenter_;
+
+    if (detectionType == "Snake" && snakeRadius < 1.0f) {
+        QMessageBox::information(this, "Snake",
+            "Please click and drag on the left image to set the initial circle first.");
+        return;
+    }
+
+    // ── Disable button while working ──────────────────────────────────────
+    processButton_->setEnabled(false);
+    processButton_->setText("Processing...");
+    setStatusText("Processing...");
+
+    // ── Launch background task ────────────────────────────────────────────
+    QFuture<PipelineResult> future = QtConcurrent::run(
+        [imageCopy, cannyParams, houghThreshold,
+         detectionType, snakeParams, snakeRadius, snakeCenter]() -> PipelineResult
+    {
+        PipelineResult result;
+
+        // Helper: inline clamp for Sobel
+        auto clampC = [](int v, int bound){ return v < 0 ? 0 : (v >= bound ? bound-1 : v); };
+
+        // ── Canny ─────────────────────────────────────────────────────
+        const backend::GrayImage edges = backend::cannyEdgeDetect(imageCopy, cannyParams);
+
+        // ── Sobel gradient magnitude (reused by Snake) ─────────────────
+        backend::GrayImage gradMag(imageCopy.width, imageCopy.height, 0.0f);
+        {
+            static constexpr int kx[9] = {-1, 0, 1, -2, 0, 2, -1, 0, 1};
+            static constexpr int ky[9] = { 1, 2, 1,  0, 0, 0, -1,-2,-1};
+            for (int y = 0; y < imageCopy.height; ++y)
+                for (int x = 0; x < imageCopy.width; ++x) {
+                    float gx = 0.f, gy = 0.f;
+                    int idx = 0;
+                    for (int j = -1; j <= 1; ++j)
+                        for (int i = -1; i <= 1; ++i, ++idx) {
+                            const float px = imageCopy.at(clampC(x+i, imageCopy.width),
+                                                           clampC(y+j, imageCopy.height));
+                            gx += kx[idx] * px;
+                            gy += ky[idx] * px;
+                        }
+                    gradMag.at(x, y) = std::hypot(gx, gy);
+                }
         }
 
-        // ── Hough Lines ────────────────────────────────────────
-        const auto lines = backend::detectLinesHough(
-            edges,
-            houghLinesThresholdSlider_->value(),
-            /*maxLines=*/20);
+        // ── Edges only ─────────────────────────────────────────────────
+        if (detectionType == "Edges") {
+            QImage out(imageCopy.width, imageCopy.height, QImage::Format_Grayscale8);
+            for (int y = 0; y < imageCopy.height; ++y)
+                for (int x = 0; x < imageCopy.width; ++x) {
+                    const int v = static_cast<int>(std::clamp(edges.at(x,y), 0.f, 255.f));
+                    out.setPixel(x, y, qRgb(v,v,v));
+                }
+            result.outputImage = out;
+            result.statusText  = "Canny edge detection complete.";
+            return result;
+        }
 
-        // Start from a colour copy of the original image
-        QImage resultImage = toQImage(image_).convertToFormat(QImage::Format_ARGB32);
-        QPainter painter(&resultImage);
+        // ── Snake ──────────────────────────────────────────────────────
+        if (detectionType == "Snake") {
+            // Part A
+            const backend::SnakeContour initial =
+                backend::initContour(
+                    static_cast<float>(snakeCenter.x()),
+                    static_cast<float>(snakeCenter.y()),
+                    snakeRadius,
+                    snakeParams.numPoints);
+
+            // Part B
+            const backend::SnakeContour evolved =
+                backend::evolveContour(initial, gradMag, snakeParams);
+
+            // Build result image (greyscale→ARGB for overlays)
+            QImage img(imageCopy.width, imageCopy.height, QImage::Format_ARGB32);
+            for (int y = 0; y < imageCopy.height; ++y)
+                for (int x = 0; x < imageCopy.width; ++x) {
+                    const int v = static_cast<int>(std::clamp(imageCopy.at(x,y), 0.f, 255.f));
+                    img.setPixel(x, y, qRgb(v,v,v));
+                }
+
+            QPainter painter(&img);
+            painter.setRenderHint(QPainter::Antialiasing);
+
+            // Initial circle (cyan dashed)
+            painter.setPen(QPen(QColor(0, 220, 255), 2, Qt::DashLine));
+            painter.drawEllipse(snakeCenter,
+                                static_cast<double>(snakeRadius),
+                                static_cast<double>(snakeRadius));
+
+            // Evolved contour (yellow)
+            painter.setPen(QPen(QColor(255, 220, 0), 2));
+            const int N = static_cast<int>(evolved.size());
+            for (int i = 0; i < N; ++i) {
+                const auto& a = evolved[static_cast<size_t>(i)];
+                const auto& b = evolved[static_cast<size_t>((i+1)%N)];
+                painter.drawLine(QPointF(a[0],a[1]), QPointF(b[0],b[1]));
+            }
+            // Contour point dots (red)
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(QColor(255, 80, 80));
+            for (const auto& pt : evolved)
+                painter.drawEllipse(QPointF(pt[0],pt[1]), 2.0, 2.0);
+            painter.end();
+
+            result.outputImage  = img;
+            result.snakeContour = evolved;
+            result.statusText   =
+                QString("Active Contour complete.\n"
+                        "Points: %1 | a=%2 | b=%3 | W=%4 | MaxIter=%5\n"
+                        "Cyan = initial circle | Yellow = evolved contour | Red dots = contour points")
+                    .arg(N)
+                    .arg(snakeParams.alpha,  0, 'f', 2)
+                    .arg(snakeParams.beta,   0, 'f', 2)
+                    .arg(snakeParams.windowSize)
+                    .arg(snakeParams.maxIterations);
+            return result;
+        }
+
+        // ── Lines / All ────────────────────────────────────────────────
+        const auto lines = backend::detectLinesHough(edges, houghThreshold, 20);
+
+        QImage img(imageCopy.width, imageCopy.height, QImage::Format_ARGB32);
+        for (int y = 0; y < imageCopy.height; ++y)
+            for (int x = 0; x < imageCopy.width; ++x) {
+                const int v = static_cast<int>(std::clamp(imageCopy.at(x,y), 0.f, 255.f));
+                img.setPixel(x, y, qRgb(v,v,v));
+            }
+
+        QPainter painter(&img);
         painter.setRenderHint(QPainter::Antialiasing);
         painter.setPen(QPen(QColor(255, 50, 50), 2));
 
         std::ostringstream report;
         report << "Detection Summary\n-----------------\n";
         report << "Lines found: " << lines.size() << "\n\n";
-
         int totalSegments = 0;
 
-        if (detectionType == "All" || detectionType == "Lines") {
-            for (std::size_t i = 0; i < lines.size(); ++i) {
-                const double rho   = lines[i].rho;
-                const double theta = lines[i].theta;
+        for (std::size_t i = 0; i < lines.size(); ++i) {
+            const double rho   = lines[i].rho;
+            const double theta = lines[i].theta;
+            report << "  L" << (i+1)
+                   << ": rho=" << static_cast<int>(rho)
+                   << "  theta=" << static_cast<int>(theta * 180.0 / M_PI) << "deg"
+                   << "  votes=" << lines[i].votes << "\n";
 
-                report << "  L" << (i + 1)
-                       << ": rho=" << static_cast<int>(rho)
-                       << "  theta=" << static_cast<int>(theta * 180.0 / M_PI) << "°"
-                       << "  votes=" << lines[i].votes << "\n";
-
-                // ── Key fix: extract actual segments, not the infinite line ──
-                const auto segments = extractLineSegments(edges, rho, theta);
-                totalSegments += static_cast<int>(segments.size());
-
-                for (const auto& [p1, p2] : segments)
-                    painter.drawLine(p1, p2);
+            // extractLineSegments is a pure free function — safe to call here
+            // but we need to replicate it inside the lambda since it is a
+            // local static in this TU.  Instead re-implement inline:
+            {
+                const double dx =  std::sin(theta);
+                const double dy = -std::cos(theta);
+                const double ox = rho * std::cos(theta);
+                const double oy = rho * std::sin(theta);
+                std::vector<double> tv;
+                for (int ey = 0; ey < edges.height; ++ey)
+                    for (int ex = 0; ex < edges.width; ++ex) {
+                        if (edges.at(ex,ey) < 128.f) continue;
+                        const double dist = std::cos(theta)*ex + std::sin(theta)*ey - rho;
+                        if (std::abs(dist) > 1.5) continue;
+                        tv.push_back(dx*(ex-ox)+dy*(ey-oy));
+                    }
+                std::sort(tv.begin(), tv.end());
+                if (!tv.empty()) {
+                    double ss = tv.front(), se = tv.front();
+                    auto toP = [&](double t){ return QPointF(ox+t*dx, oy+t*dy); };
+                    for (size_t k = 1; k < tv.size(); ++k) {
+                        if (tv[k]-tv[k-1] <= 8.0) { se = tv[k]; }
+                        else {
+                            if (se-ss >= 15.0) { painter.drawLine(toP(ss),toP(se)); ++totalSegments; }
+                            ss = se = tv[k];
+                        }
+                    }
+                    if (se-ss >= 15.0) { painter.drawLine(toP(ss),toP(se)); ++totalSegments; }
+                }
             }
         }
-
+        painter.end();
         report << "\nTotal drawn segments: " << totalSegments;
 
-        edgesLabel_->setPixmap(
-            QPixmap::fromImage(resultImage)
-                .scaled(edgesLabel_->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
-        setStatusText(QString::fromStdString(report.str()));
+        result.outputImage = img;
+        result.statusText  = QString::fromStdString(report.str());
+        return result;
+    });
 
-    } catch (const std::exception& ex) {
-        QMessageBox::critical(this, "Processing failed", ex.what());
-    }
+    watcher_->setFuture(future);
 }
 
-// ─────────────────────────────────────────────────────────────
+// =============================================================================
+// onProcessingFinished -- called in the main thread by QFutureWatcher
+// =============================================================================
+void MainWindow::onProcessingFinished()
+{
+    PipelineResult result = watcher_->result();
+
+    // Cache gradient mag and evolved contour back to member state
+    // (not available from worker; grad mag recomputed there, contour returned)
+    snakeContour_ = result.snakeContour;
+
+    edgesLabel_->setPixmap(
+        QPixmap::fromImage(result.outputImage)
+            .scaled(edgesLabel_->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    setStatusText(result.statusText);
+
+    // Re-enable the run button
+    processButton_->setEnabled(true);
+    processButton_->setText("  Process Image");
+}
+
+// =============================================================================
 void MainWindow::mouseDoubleClickEvent(QMouseEvent* event)
 {
     if (event->button() == Qt::LeftButton && inputLabel_->underMouse())
@@ -439,7 +798,5 @@ void MainWindow::onDetectionTypeChanged(int index)
 {
     const QString t = detectionTypeBox_->itemText(index);
     houghLinesParamsWidget_->setVisible(t == "All" || t == "Lines");
+    snakeParamsWidget_->setVisible(t == "Snake");
 }
-
-
-

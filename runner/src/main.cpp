@@ -2,29 +2,27 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #include "Canny.hpp"
 #include "Hough.hpp"
-#include "ImageIO.hpp"
+#include "Image.hpp"
 
 namespace {
 
 void printUsage() {
     std::cout << "Usage:\n"
-              << "  imgproc_runner <input.(pgm|ppm)> <output_prefix> [options]\n\n"
+              << "  imgproc_runner <input.pgm> <output_prefix> [options]\n\n"
               << "Options:\n"
-              << "  --low <value>          Canny low threshold (default: 30)\n"
-              << "  --high <value>         Canny high threshold (default: 80)\n"
-              << "  --line-th <votes>      Hough line vote threshold (default: 100)\n"
-              << "  --circle-th <votes>    Hough circle vote threshold (default: 80)\n"
-              << "  --min-r <radius>       Min circle radius (default: 10)\n"
-              << "  --max-r <radius>       Max circle radius (default: 80)\n";
+              << "  --low <value>        Canny low threshold (default: 30)\n"
+              << "  --high <value>       Canny high threshold (default: 80)\n"
+              << "  --line-th <votes>    Hough line vote threshold (default: 100)\n";
 }
 
 void saveDetections(
     const std::string& path,
-    const std::vector<backend::LineDetection>& lines,
-    const std::vector<backend::CircleDetection>& circles) {
+    const std::vector<backend::LineDetection>& lines) {
+
     std::ofstream out(path);
     if (!out) {
         throw std::runtime_error("Failed to create detections file: " + path);
@@ -33,11 +31,6 @@ void saveDetections(
     out << "LINES " << lines.size() << "\n";
     for (const auto& line : lines) {
         out << line.rho << " " << line.theta << " " << line.votes << "\n";
-    }
-
-    out << "CIRCLES " << circles.size() << "\n";
-    for (const auto& circle : circles) {
-        out << circle.centerX << " " << circle.centerY << " " << circle.radius << " " << circle.votes << "\n";
     }
 }
 
@@ -54,14 +47,13 @@ int main(int argc, char** argv) {
 
     backend::CannyParams cannyParams;
     int lineThreshold = 100;
-    int circleThreshold = 80;
-    int minRadius = 10;
-    int maxRadius = 80;
 
+    // Parse optional arguments
     for (int i = 3; i < argc; i += 2) {
         if (i + 1 >= argc) {
             throw std::runtime_error("Missing value for argument: " + std::string(argv[i]));
         }
+
         const std::string key = argv[i];
         const std::string value = argv[i + 1];
 
@@ -71,31 +63,32 @@ int main(int argc, char** argv) {
             cannyParams.highThreshold = std::stod(value);
         } else if (key == "--line-th") {
             lineThreshold = std::stoi(value);
-        } else if (key == "--circle-th") {
-            circleThreshold = std::stoi(value);
-        } else if (key == "--min-r") {
-            minRadius = std::stoi(value);
-        } else if (key == "--max-r") {
-            maxRadius = std::stoi(value);
         } else {
             throw std::runtime_error("Unknown argument: " + key);
         }
     }
 
     try {
+        // Load image
         const backend::GrayImage image = backend::loadImageAsGray(inputPath);
-        const backend::GrayImage edges = backend::cannyEdgeDetect(image, cannyParams);
-        const auto lines = backend::detectLinesHough(edges, lineThreshold, 20);
-        const auto circles = backend::detectCirclesHough(edges, minRadius, maxRadius, circleThreshold, 20);
 
+        // Canny edge detection
+        const backend::GrayImage edges = backend::cannyEdgeDetect(image, cannyParams);
+
+        // Hough line detection
+        const std::vector<backend::LineDetection> lines =
+            backend::detectLinesHough(edges, lineThreshold, 20);
+
+        // Save outputs
         backend::savePgm(edges, outputPrefix + "_edges.pgm");
-        saveDetections(outputPrefix + "_detections.txt", lines, circles);
+        saveDetections(outputPrefix + "_detections.txt", lines);
 
         std::cout << "Saved: " << outputPrefix << "_edges.pgm\n";
         std::cout << "Saved: " << outputPrefix << "_detections.txt\n";
         std::cout << "Detected lines: " << lines.size() << "\n";
-        std::cout << "Detected circles: " << circles.size() << "\n";
+
         return 0;
+
     } catch (const std::exception& ex) {
         std::cerr << "Error: " << ex.what() << '\n';
         return 2;

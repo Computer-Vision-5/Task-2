@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <vector>
+#include <string>
 
 namespace backend {
 
@@ -18,5 +19,10 @@ struct GrayImage {
     float& at(int x, int y) { return pixels.at(static_cast<std::size_t>(y * width + x)); }
     float at(int x, int y) const { return pixels.at(static_cast<std::size_t>(y * width + x)); }
 };
+
+
+GrayImage loadImageAsGray(const std::string& path);
+void savePgm(const GrayImage& img, const std::string& path);
+
 
 } // namespace backend
