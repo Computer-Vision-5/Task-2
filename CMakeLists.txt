@@ -5,8 +5,18 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# 1. Point CMake to your specific Qt installation
-set(CMAKE_PREFIX_PATH "C:/Qt/6.10.2/mingw_64")
+# Optional Qt root. Pass with:
+#   -DQT_ROOT_DIR="C:/msys64/ucrt64"
+# or point directly to a Qt SDK root that contains lib/cmake/Qt6.
+set(QT_ROOT_DIR "" CACHE PATH "Qt root directory")
+if(QT_ROOT_DIR)
+        list(PREPEND CMAKE_PREFIX_PATH "${QT_ROOT_DIR}")
+
+        # Ensure Qt host tools (rcc/moc/uic) load matching runtime DLLs.
+        if(WIN32)
+                set(ENV{PATH} "${QT_ROOT_DIR}/bin;${QT_ROOT_DIR}/share/qt6/bin;$ENV{PATH}")
+        endif()
+endif()
 
 option(ENABLE_QT_FRONTEND "Build Qt frontend" ON)
 

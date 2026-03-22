@@ -82,4 +82,16 @@ private:
     QSlider* snakeNumPointsSlider_ = nullptr;
     QSlider* snakeMaxIterSlider_   = nullptr;
     QSlider* snakeThresholdSlider_ = nullptr;
+
+    // Hough Circles params
+    QWidget* houghCirclesParamsWidget_  = nullptr;
+    QSlider* houghCirclesThresholdSlider_ = nullptr;
+    QSlider* houghCirclesMinRSlider_    = nullptr;
+    QSlider* houghCirclesMaxRSlider_    = nullptr;
+
+    // Hough Ellipses params
+    QWidget* houghEllipsesParamsWidget_ = nullptr;
+    QSlider* houghEllipsesThresholdSlider_ = nullptr;
+    QSlider* houghEllipsesMinASlider_   = nullptr;
+    QSlider* houghEllipsesMaxASlider_   = nullptr;
 };

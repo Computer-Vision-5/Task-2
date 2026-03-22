@@ -119,7 +119,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
     // ── Detection mode selector ───────────────────────────────────────────
     sideLayout->addWidget(makeSectionLabel("Detection Mode", scrollWidget));
     detectionTypeBox_ = new QComboBox(scrollWidget);
-    detectionTypeBox_->addItems({"All", "Edges", "Lines", "Snake"});
+    detectionTypeBox_->addItems({"All", "Edges", "Lines", "Circles", "Ellipses", "Snake"});
     sideLayout->addWidget(detectionTypeBox_);
 
     sideLayout->addSpacing(8);
@@ -164,6 +164,46 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
                         "Threshold", houghLinesThresholdSlider_, dummy5,
                         1, 1000, 100));
     sideLayout->addWidget(houghLinesParamsWidget_);
+    sideLayout->addSpacing(4);
+
+    // ── Hough Circles group ───────────────────────────────────────────────
+    houghCirclesParamsWidget_ = new QGroupBox("Hough Circles", scrollWidget);
+    auto* circlesLayout = new QVBoxLayout(houghCirclesParamsWidget_);
+    circlesLayout->setSpacing(6);
+    QLabel* dC1 = nullptr; QLabel* dC2 = nullptr; QLabel* dC3 = nullptr;
+    circlesLayout->addWidget(
+        makeSliderBlock(static_cast<QGroupBox*>(houghCirclesParamsWidget_),
+                        "Threshold", houghCirclesThresholdSlider_, dC1,
+                        1, 500, 15));
+    circlesLayout->addWidget(
+        makeSliderBlock(static_cast<QGroupBox*>(houghCirclesParamsWidget_),
+                        "Min Radius", houghCirclesMinRSlider_, dC2,
+                        5, 200, 15));
+    circlesLayout->addWidget(
+        makeSliderBlock(static_cast<QGroupBox*>(houghCirclesParamsWidget_),
+                        "Max Radius", houghCirclesMaxRSlider_, dC3,
+                        10, 250, 150));
+    sideLayout->addWidget(houghCirclesParamsWidget_);
+    sideLayout->addSpacing(4);
+
+    // ── Hough Ellipses group ──────────────────────────────────────────────
+    houghEllipsesParamsWidget_ = new QGroupBox("Hough Ellipses", scrollWidget);
+    auto* ellipsesLayout = new QVBoxLayout(houghEllipsesParamsWidget_);
+    ellipsesLayout->setSpacing(6);
+    QLabel* dE1 = nullptr; QLabel* dE2 = nullptr; QLabel* dE3 = nullptr;
+    ellipsesLayout->addWidget(
+        makeSliderBlock(static_cast<QGroupBox*>(houghEllipsesParamsWidget_),
+                        "Threshold", houghEllipsesThresholdSlider_, dE1,
+                        1, 500, 60));
+    ellipsesLayout->addWidget(
+        makeSliderBlock(static_cast<QGroupBox*>(houghEllipsesParamsWidget_),
+                        "Min Axis", houghEllipsesMinASlider_, dE2,
+                        10, 100, 20));
+    ellipsesLayout->addWidget(
+        makeSliderBlock(static_cast<QGroupBox*>(houghEllipsesParamsWidget_),
+                        "Max Axis", houghEllipsesMaxASlider_, dE3,
+                        20, 200, 80));
+    sideLayout->addWidget(houghEllipsesParamsWidget_);
     sideLayout->addSpacing(4);
 
     // ── Snake group ───────────────────────────────────────────────────────
@@ -322,7 +362,9 @@ void MainWindow::onLoadImage()
         QMessageBox::critical(this, "Load failed", "Failed to load image file.");
         return;
     }
-
+    if (qImage.width() > 800 || qImage.height() > 800) {
+            qImage = qImage.scaled(800, 800, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    }
     image_ = backend::GrayImage(qImage.width(), qImage.height());
     for (int y = 0; y < qImage.height(); ++y)
         for (int x = 0; x < qImage.width(); ++x)
@@ -566,6 +608,12 @@ void MainWindow::onRunPipeline()
     }
 
     const int    houghThreshold = houghLinesThresholdSlider_->value();
+    const int    circleThreshold = houghCirclesThresholdSlider_->value();
+    const int    minRadius = houghCirclesMinRSlider_->value();
+    const int    maxRadius = houghCirclesMaxRSlider_->value();
+    const int    ellipseThreshold = houghEllipsesThresholdSlider_->value();
+    const int    minA = houghEllipsesMinASlider_->value();
+    const int    maxA = houghEllipsesMaxASlider_->value();
 
     backend::SnakeParams snakeParams;
     snakeParams.alpha                = snakeAlphaSlider_->value()     / 100.0f;
@@ -594,7 +642,9 @@ void MainWindow::onRunPipeline()
     // ── Launch background task ────────────────────────────────────────────
     QFuture<PipelineResult> future = QtConcurrent::run(
         [imageCopy, cannyParams, houghThreshold,
-         detectionType, snakeParams, snakeRadius, snakeCenter]() -> PipelineResult
+         detectionType, snakeParams, snakeRadius, snakeCenter,
+         circleThreshold, minRadius, maxRadius,
+         ellipseThreshold, minA, maxA]() -> PipelineResult
     {
         PipelineResult result;
 
@@ -699,6 +749,15 @@ void MainWindow::onRunPipeline()
 
         // ── Lines / All ────────────────────────────────────────────────
         const auto lines = backend::detectLinesHough(edges, houghThreshold, 20);
+        const auto circles = backend::detectCirclesHough(edges, minRadius, maxRadius, circleThreshold, 20);
+        
+        // Note: detectEllipsesTough requires minB and maxB parameters
+        // For now, using minA as minB and maxA as maxB (circular ellipses)
+        // TODO: Add separate minB/maxB sliders  
+        std::vector<backend::EllipseDetection> ellipses;
+        if (detectionType == "All" || detectionType == "Ellipses") {
+            ellipses = backend::detectEllipsesHough(edges, minA, maxA, minA, maxA, ellipseThreshold, 20);
+        }
 
         QImage img(imageCopy.width, imageCopy.height, QImage::Format_ARGB32);
         for (int y = 0; y < imageCopy.height; ++y)
@@ -709,54 +768,117 @@ void MainWindow::onRunPipeline()
 
         QPainter painter(&img);
         painter.setRenderHint(QPainter::Antialiasing);
-        painter.setPen(QPen(QColor(255, 50, 50), 2));
 
         std::ostringstream report;
         report << "Detection Summary\n-----------------\n";
-        report << "Lines found: " << lines.size() << "\n\n";
         int totalSegments = 0;
 
-        for (std::size_t i = 0; i < lines.size(); ++i) {
-            const double rho   = lines[i].rho;
-            const double theta = lines[i].theta;
-            report << "  L" << (i+1)
-                   << ": rho=" << static_cast<int>(rho)
-                   << "  theta=" << static_cast<int>(theta * 180.0 / M_PI) << "deg"
-                   << "  votes=" << lines[i].votes << "\n";
+        // ── Render Lines ───────────────────────────────────────────────
+        if (detectionType == "All" || detectionType == "Lines") {
+            painter.setPen(QPen(QColor(255, 50, 50), 2));
+            report << "Lines found: " << lines.size() << "\n\n";
 
-            // extractLineSegments is a pure free function — safe to call here
-            // but we need to replicate it inside the lambda since it is a
-            // local static in this TU.  Instead re-implement inline:
-            {
-                const double dx =  std::sin(theta);
-                const double dy = -std::cos(theta);
-                const double ox = rho * std::cos(theta);
-                const double oy = rho * std::sin(theta);
-                std::vector<double> tv;
-                for (int ey = 0; ey < edges.height; ++ey)
-                    for (int ex = 0; ex < edges.width; ++ex) {
-                        if (edges.at(ex,ey) < 128.f) continue;
-                        const double dist = std::cos(theta)*ex + std::sin(theta)*ey - rho;
-                        if (std::abs(dist) > 1.5) continue;
-                        tv.push_back(dx*(ex-ox)+dy*(ey-oy));
-                    }
-                std::sort(tv.begin(), tv.end());
-                if (!tv.empty()) {
-                    double ss = tv.front(), se = tv.front();
-                    auto toP = [&](double t){ return QPointF(ox+t*dx, oy+t*dy); };
-                    for (size_t k = 1; k < tv.size(); ++k) {
-                        if (tv[k]-tv[k-1] <= 8.0) { se = tv[k]; }
-                        else {
-                            if (se-ss >= 15.0) { painter.drawLine(toP(ss),toP(se)); ++totalSegments; }
-                            ss = se = tv[k];
+            for (std::size_t i = 0; i < lines.size(); ++i) {
+                const double rho   = lines[i].rho;
+                const double theta = lines[i].theta;
+                report << "  L" << (i+1)
+                       << ": rho=" << static_cast<int>(rho)
+                       << "  theta=" << static_cast<int>(theta * 180.0 / M_PI) << "deg"
+                       << "  votes=" << lines[i].votes << "\n";
+
+                // Extract and draw line segments
+                {
+                    const double dx =  std::sin(theta);
+                    const double dy = -std::cos(theta);
+                    const double ox = rho * std::cos(theta);
+                    const double oy = rho * std::sin(theta);
+                    std::vector<double> tv;
+                    for (int ey = 0; ey < edges.height; ++ey)
+                        for (int ex = 0; ex < edges.width; ++ex) {
+                            if (edges.at(ex,ey) < 128.f) continue;
+                            const double dist = std::cos(theta)*ex + std::sin(theta)*ey - rho;
+                            if (std::abs(dist) > 1.5) continue;
+                            tv.push_back(dx*(ex-ox)+dy*(ey-oy));
                         }
+                    std::sort(tv.begin(), tv.end());
+                    if (!tv.empty()) {
+                        double ss = tv.front(), se = tv.front();
+                        auto toP = [&](double t){ return QPointF(ox+t*dx, oy+t*dy); };
+                        for (size_t k = 1; k < tv.size(); ++k) {
+                            if (tv[k]-tv[k-1] <= 8.0) { se = tv[k]; }
+                            else {
+                                if (se-ss >= 15.0) { painter.drawLine(toP(ss),toP(se)); ++totalSegments; }
+                                ss = se = tv[k];
+                            }
+                        }
+                        if (se-ss >= 15.0) { painter.drawLine(toP(ss),toP(se)); ++totalSegments; }
                     }
-                    if (se-ss >= 15.0) { painter.drawLine(toP(ss),toP(se)); ++totalSegments; }
                 }
             }
+            report << "Total line segments: " << totalSegments << "\n";
         }
+
+        // ── Render Circles ─────────────────────────────────────────────
+        if (detectionType == "All" || detectionType == "Circles") {
+            painter.setPen(QPen(QColor(100, 255, 100), 2));
+            painter.setBrush(Qt::NoBrush);
+            report << "Circles found: " << circles.size() << "\n\n";
+
+            for (std::size_t i = 0; i < circles.size(); ++i) {
+                const auto& c = circles[i];
+                
+                // Bounds check
+                if (c.centerX < 0 || c.centerX >= imageCopy.width ||
+                    c.centerY < 0 || c.centerY >= imageCopy.height ||
+                    c.radius <= 0) {
+                    continue;
+                }
+                
+                report << "  C" << (i+1)
+                       << ": x=" << c.centerX
+                       << "  y=" << c.centerY
+                       << "  r=" << c.radius
+                       << "  votes=" << c.votes << "\n";
+                painter.drawEllipse(QPointF(c.centerX, c.centerY), c.radius, c.radius);
+            }
+            report << "\n";
+        }
+
+        // ── Render Ellipses ───────────────────────────────────────────
+        if (detectionType == "All" || detectionType == "Ellipses") {
+            painter.setPen(QPen(QColor(100, 100, 255), 2));
+            painter.setBrush(Qt::NoBrush);
+            report << "Ellipses found: " << ellipses.size() << "\n\n";
+
+            for (std::size_t i = 0; i < ellipses.size(); ++i) {
+                const auto& e = ellipses[i];
+                
+                // Bounds check
+                if (e.centerX < 0 || e.centerX >= imageCopy.width ||
+                    e.centerY < 0 || e.centerY >= imageCopy.height ||
+                    e.a <= 0 || e.b <= 0) {
+                    continue;
+                }
+                
+                report << "  E" << (i+1)
+                       << ": x=" << e.centerX
+                       << "  y=" << e.centerY
+                       << "  a=" << e.a
+                       << "  b=" << e.b
+                       << "  angle=" << static_cast<int>(e.angle * 180.0 / M_PI) << "deg"
+                       << "  votes=" << e.votes << "\n";
+
+                // Draw rotated ellipse
+                painter.save();
+                painter.translate(e.centerX, e.centerY);
+                painter.rotate(e.angle * 180.0 / M_PI);
+                painter.drawEllipse(QPointF(0, 0), e.a, e.b);
+                painter.restore();
+            }
+            report << "\n";
+        }
+
         painter.end();
-        report << "\nTotal drawn segments: " << totalSegments;
 
         result.outputImage = img;
         result.statusText  = QString::fromStdString(report.str());
@@ -798,5 +920,7 @@ void MainWindow::onDetectionTypeChanged(int index)
 {
     const QString t = detectionTypeBox_->itemText(index);
     houghLinesParamsWidget_->setVisible(t == "All" || t == "Lines");
+    houghCirclesParamsWidget_->setVisible(t == "All" || t == "Circles");
+    houghEllipsesParamsWidget_->setVisible(t == "All" || t == "Ellipses");
     snakeParamsWidget_->setVisible(t == "Snake");
 }
