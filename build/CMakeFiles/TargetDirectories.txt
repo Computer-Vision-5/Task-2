@@ -1,7 +1,7 @@
-G:/project cv/Task-2/build/CMakeFiles/imgproc_backend.dir
-G:/project cv/Task-2/build/CMakeFiles/imgproc_runner.dir
-G:/project cv/Task-2/build/CMakeFiles/imgproc_qt.dir
-G:/project cv/Task-2/build/CMakeFiles/edit_cache.dir
-G:/project cv/Task-2/build/CMakeFiles/rebuild_cache.dir
-G:/project cv/Task-2/build/CMakeFiles/imgproc_qt_autogen_timestamp_deps.dir
-G:/project cv/Task-2/build/CMakeFiles/imgproc_qt_autogen.dir
+D:/Task-2/build/CMakeFiles/imgproc_backend.dir
+D:/Task-2/build/CMakeFiles/imgproc_runner.dir
+D:/Task-2/build/CMakeFiles/imgproc_qt.dir
+D:/Task-2/build/CMakeFiles/edit_cache.dir
+D:/Task-2/build/CMakeFiles/rebuild_cache.dir
+D:/Task-2/build/CMakeFiles/imgproc_qt_autogen_timestamp_deps.dir
+D:/Task-2/build/CMakeFiles/imgproc_qt_autogen.dir
