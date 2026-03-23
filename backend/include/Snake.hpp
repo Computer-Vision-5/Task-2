@@ -42,4 +42,32 @@ SnakeContour evolveContour(const SnakeContour&  initial,
                            const GrayImage&      gradientMagnitude,
                            const SnakeParams&    params);
 
+/// Part C — Chain-code representation (Freeman 8-connectivity).
+///
+/// Converts the contour to a sequence of direction codes 0–7.
+/// Convention (starting East, counter-clockwise increments):
+///   0=E, 1=NE, 2=N, 3=NW, 4=W, 5=SW, 6=S, 7=SE
+/// The contour is treated as closed (last→first transition is also encoded).
+///
+/// \param contour  Any SnakeContour produced by initContour() or evolveContour()
+/// \returns        Vector of direction codes (same length as contour)
+std::vector<int> contourChainCode(const SnakeContour& contour);
+
+/// Part D — Enclosed area (Shoelace / Gauss formula), in pixels².
+///
+/// Uses the standard signed-area formula; returns the absolute value.
+///
+/// \param contour  Closed contour (N points, last→first edge implicit)
+/// \returns        Area in pixels²
+float contourArea(const SnakeContour& contour);
+
+/// Part E — Perimeter (sum of Euclidean edge lengths), in pixels.
+///
+/// Sums the Euclidean distances between consecutive contour points,
+/// including the closing edge from the last point back to the first.
+///
+/// \param contour  Closed contour
+/// \returns        Perimeter in pixels
+float contourPerimeter(const SnakeContour& contour);
+
 } // namespace backend

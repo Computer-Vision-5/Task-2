@@ -52,6 +52,10 @@ private:
         QImage  outputImage;
         QString statusText;
         backend::SnakeContour snakeContour;   ///< filled only in Snake mode
+        // ── Snake analysis results (Parts C / D / E) ──────────────────
+        std::vector<int> chainCodes;          ///< Freeman 8-direction codes
+        float            contourArea      = 0.0f;  ///< px²
+        float            contourPerimeter = 0.0f;  ///< px
     };
 
     // Main UI widgets

@@ -733,11 +733,16 @@ void MainWindow::onRunPipeline()
                 painter.drawEllipse(QPointF(pt[0],pt[1]), 2.0, 2.0);
             painter.end();
 
+            // ── Parts C / D / E — Chain code, Area, Perimeter ────────
+            result.chainCodes        = backend::contourChainCode(evolved);
+            result.contourArea       = backend::contourArea(evolved);
+            result.contourPerimeter  = backend::contourPerimeter(evolved);
+
             result.outputImage  = img;
             result.snakeContour = evolved;
             result.statusText   =
                 QString("Active Contour complete.\n"
-                        "Points: %1 | a=%2 | b=%3 | W=%4 | MaxIter=%5\n"
+                        "Points: %1 | \u03b1=%2 | \u03b2=%3 | W=%4 | MaxIter=%5\n"
                         "Cyan = initial circle | Yellow = evolved contour | Red dots = contour points")
                     .arg(N)
                     .arg(snakeParams.alpha,  0, 'f', 2)
@@ -902,7 +907,28 @@ void MainWindow::onProcessingFinished()
     edgesLabel_->setPixmap(
         QPixmap::fromImage(result.outputImage)
             .scaled(edgesLabel_->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
-    setStatusText(result.statusText);
+
+    // ── Append chain code / area / perimeter if in Snake mode ────────────
+    QString fullText = result.statusText;
+    if (!result.chainCodes.empty()) {
+        fullText += QString("\n\n── Contour Analysis ──\n");
+        fullText += QString("Area      : %1 px\u00b2\n")
+                        .arg(static_cast<double>(result.contourArea), 0, 'f', 1);
+        fullText += QString("Perimeter : %1 px\n")
+                        .arg(static_cast<double>(result.contourPerimeter), 0, 'f', 1);
+
+        // Chain code — print all codes on one line, wrap every 20
+        fullText += QString("Chain Code (%1 codes):\n").arg(result.chainCodes.size());
+        QString codeLine;
+        for (int ci = 0; ci < static_cast<int>(result.chainCodes.size()); ++ci) {
+            codeLine += QString::number(result.chainCodes[static_cast<size_t>(ci)]);
+            if (ci + 1 < static_cast<int>(result.chainCodes.size())) {
+                codeLine += (((ci + 1) % 20 == 0) ? "\n" : " ");
+            }
+        }
+        fullText += codeLine;
+    }
+    setStatusText(fullText);
 
     // Re-enable the run button
     processButton_->setEnabled(true);
