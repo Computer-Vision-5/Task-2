@@ -18,6 +18,7 @@ struct SnakeParams {
     int   numPoints            = 60;     ///< Number of uniformly-sampled contour points
     int   maxIterations        = 200;    ///< Hard iteration cap
     float convergenceThreshold = 0.5f;  ///< Stop when total displacement < this (pixels)
+    int   gradientBlurPasses   = 3;     ///< Number of 3x3 Gaussian blur passes on gradient map (widens attraction basin)
 };
 
 /// Part A — Initialise a uniformly-sampled circular contour.

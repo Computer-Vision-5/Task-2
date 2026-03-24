@@ -88,7 +88,12 @@ SnakeContour evolveContour(const SnakeContour&  initial,
     if (initial.empty() || !gradientMagnitude.isValid())
         return initial;
 
-    const GrayImage smoothGrad = gaussianBlur3x3(gradientMagnitude);
+    // Apply multiple blur passes to widen the gradient attraction basin.
+    // More passes = snake can "sense" edges from further away (Solution 1).
+    GrayImage smoothGrad = gradientMagnitude;
+    const int blurPasses = std::max(1, params.gradientBlurPasses);
+    for (int p = 0; p < blurPasses; ++p)
+        smoothGrad = gaussianBlur3x3(smoothGrad);
 
     const int   W    = params.windowSize;
     const float alpha= params.alpha;

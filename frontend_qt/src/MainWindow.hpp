@@ -86,6 +86,7 @@ private:
     QSlider* snakeNumPointsSlider_ = nullptr;
     QSlider* snakeMaxIterSlider_   = nullptr;
     QSlider* snakeThresholdSlider_ = nullptr;
+    QSlider*   snakeGradBlurSlider_  = nullptr;  ///< Number of gradient blur passes
 
     // Hough Circles params
     QWidget* houghCirclesParamsWidget_  = nullptr;
