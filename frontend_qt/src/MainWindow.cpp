@@ -9,6 +9,7 @@
 #include <QMessageBox>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QWheelEvent>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QVBoxLayout>
@@ -255,6 +256,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 
     connect(processButton_, &QPushButton::clicked, this, &MainWindow::onRunPipeline);
     inputLabel_->installEventFilter(this);
+    edgesLabel_->installEventFilter(this);
 }
 
 // =============================================================================
@@ -299,23 +301,86 @@ void MainWindow::onLoadImage()
     snakeRadius_ = 0.0f;
     snakeContour_.clear();
     gradientMag_ = backend::GrayImage{};
+    inputZoom_   = 1.0;
+    outputZoom_  = 1.0;
+    outputBasePixmap_ = QPixmap{};
 
-    const QPixmap pix = QPixmap::fromImage(qImage)
+    // Store full-size pixmap first; then show scaled version
+    inputBasePixmap_ = QPixmap::fromImage(qImage);
+    const QPixmap pix = inputBasePixmap_
         .scaled(inputLabel_->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
     inputLabel_->setPixmap(pix);
-    snakeOverlayPixmap_ = pix; 
+    snakeOverlayPixmap_ = pix;
 
     edgesLabel_->setText("Output will appear here");
     fileLabel_->setText("Loaded: " + path);
     setStatusText("Image loaded. Press 'Process Image' to run the pipeline.");
 }
 
+// ── Helper: draw the placed snake circle onto the current overlay ────────────
+void MainWindow::redrawSnakeCircle()
+{
+    if (snakeRadius_ < 1.0f) return;
+
+    const QPixmap& pm = inputLabel_->pixmap();
+    const QSize    ls = inputLabel_->size();
+    const double   ox = (ls.width()  - pm.width())  / 2.0;
+    const double   oy = (ls.height() - pm.height()) / 2.0;
+
+    // Convert image-space centre → pixmap space
+    const double scaleX = static_cast<double>(pm.width())  / image_.width;
+    const double scaleY = static_cast<double>(pm.height()) / image_.height;
+    const double cx = snakeCenter_.x() * scaleX;
+    const double cy = snakeCenter_.y() * scaleY;
+    const double r  = static_cast<double>(snakeRadius_) * scaleX;
+
+    QPixmap overlay = snakeOverlayPixmap_;
+    QPainter p(&overlay);
+    p.setRenderHint(QPainter::Antialiasing);
+    p.setPen(QPen(QColor(0, 220, 255), 2));
+    p.drawEllipse(QPointF(cx, cy), r, r);
+    (void)ox; (void)oy;
+    inputLabel_->setPixmap(overlay);
+}
+
 bool MainWindow::eventFilter(QObject* watched, QEvent* event)
 {
+    // ── Scroll-wheel zoom for both image panels ────────────────────────────
+    if (event->type() == QEvent::Wheel &&
+        (watched == inputLabel_ || watched == edgesLabel_))
+    {
+        auto* we = static_cast<QWheelEvent*>(event);
+        const double delta  = we->angleDelta().y();
+        const double factor = (delta > 0) ? 1.15 : (1.0 / 1.15);
+
+        if (watched == inputLabel_ && !inputBasePixmap_.isNull()) {
+            inputZoom_ = std::clamp(inputZoom_ * factor, 0.25, 4.0);
+            // Build scaled pixmap from the base and paint the circle overlay
+            const QSize baseSize = inputLabel_->size();
+            const QPixmap scaledBase = inputBasePixmap_
+                .scaled(baseSize * inputZoom_, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+            snakeOverlayPixmap_ = scaledBase;
+            if (snakeRadius_ >= 1.0f)
+                redrawSnakeCircle();
+            else
+                inputLabel_->setPixmap(scaledBase);
+        } else if (watched == edgesLabel_ && !outputBasePixmap_.isNull()) {
+            outputZoom_ = std::clamp(outputZoom_ * factor, 0.25, 4.0);
+            const QSize baseSize = edgesLabel_->size();
+            edgesLabel_->setPixmap(
+                outputBasePixmap_.scaled(baseSize * outputZoom_,
+                                         Qt::KeepAspectRatio,
+                                         Qt::SmoothTransformation));
+        }
+        return true;
+    }
+
+    // Only snake-circle interactions live on the input label
     if (watched != inputLabel_) return QMainWindow::eventFilter(watched, event);
     if (detectionTypeBox_->currentText() != "Snake") return QMainWindow::eventFilter(watched, event);
     if (!image_.isValid()) return QMainWindow::eventFilter(watched, event);
 
+    // ── Coordinate helpers ────────────────────────────────────────────────
     auto pixmapOffset = [this]() -> QPointF {
         const QPixmap& pm = inputLabel_->pixmap();
         const QSize    ls = inputLabel_->size();
@@ -342,15 +407,50 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event)
         return r * scaleX;
     };
 
+    // Convert image-space centre back to pixmap-space (needed for hit-test)
+    auto imageCenterToLabel = [&]() -> QPointF {
+        const QPixmap& pm  = inputLabel_->pixmap();
+        const QPointF  off = pixmapOffset();
+        const double scaleX = static_cast<double>(pm.width())  / image_.width;
+        const double scaleY = static_cast<double>(pm.height()) / image_.height;
+        return { snakeCenter_.x() * scaleX + off.x(),
+                 snakeCenter_.y() * scaleY + off.y() };
+    };
+
+    auto imageRadiusToLabel = [&]() -> double {
+        const QPixmap& pm  = inputLabel_->pixmap();
+        const double scaleX = static_cast<double>(pm.width()) / image_.width;
+        return static_cast<double>(snakeRadius_) * scaleX;
+    };
+
+    // ── Mouse press ──────────────────────────────────────────────────────
     if (event->type() == QEvent::MouseButtonPress) {
         auto* me = static_cast<QMouseEvent*>(event);
         if (me->button() == Qt::LeftButton) {
-            snakePressPos_ = me->position();
+            const QPointF pos = me->position();
+
+            // If a circle already exists, check if the user clicked inside it
+            if (snakeRadius_ >= 1.0f) {
+                const QPointF cLabel = imageCenterToLabel();
+                const double  rLabel = imageRadiusToLabel();
+                const double  dx     = pos.x() - cLabel.x();
+                const double  dy     = pos.y() - cLabel.y();
+                if (std::sqrt(dx*dx + dy*dy) <= rLabel + 8.0) {
+                    // Start moving the existing circle
+                    snakeMoving_     = true;
+                    snakeMoveOffset_ = QPointF(pos.x() - cLabel.x(), pos.y() - cLabel.y());
+                    return true;
+                }
+            }
+
+            // Otherwise start drawing a new circle
+            snakePressPos_ = pos;
             snakePlacing_  = true;
             return true;
         }
     }
 
+    // ── Mouse move – drawing new circle ─────────────────────────────────
     if (event->type() == QEvent::MouseMove && snakePlacing_) {
         auto* me = static_cast<QMouseEvent*>(event);
         const QPointF cur = me->position();
@@ -369,6 +469,31 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event)
         return true;
     }
 
+    // ── Mouse move – moving existing circle ──────────────────────────────
+    if (event->type() == QEvent::MouseMove && snakeMoving_) {
+        auto* me = static_cast<QMouseEvent*>(event);
+        const QPointF pos = me->position();
+        // New label-space centre
+        const QPointF newCLabel(
+            pos.x() - snakeMoveOffset_.x(),
+            pos.y() - snakeMoveOffset_.y());
+        // Convert to image space
+        snakeCenter_ = labelToImage(newCLabel);
+
+        // Redraw overlay with the circle at the new position
+        const QPointF pmCenter = labelToPixmap(newCLabel);
+        const double  rLabel   = imageRadiusToLabel();
+
+        QPixmap overlay = snakeOverlayPixmap_;
+        QPainter p(&overlay);
+        p.setRenderHint(QPainter::Antialiasing);
+        p.setPen(QPen(QColor(0, 220, 255), 2, Qt::DashLine));
+        p.drawEllipse(pmCenter, rLabel, rLabel);
+        inputLabel_->setPixmap(overlay);
+        return true;
+    }
+
+    // ── Mouse release – finish drawing new circle ────────────────────────
     if (event->type() == QEvent::MouseButtonRelease && snakePlacing_) {
         auto* me = static_cast<QMouseEvent*>(event);
         const QPointF cur = me->position();
@@ -393,6 +518,20 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event)
 
         setStatusText(
             QString("Snake circle set -- centre (%.0f, %.0f), radius %.0f px in image space. "
+                    "Press 'Process Image' to evolve.")
+                .arg(snakeCenter_.x())
+                .arg(snakeCenter_.y())
+                .arg(snakeRadius_));
+        return true;
+    }
+
+    // ── Mouse release – finish moving existing circle ────────────────────
+    if (event->type() == QEvent::MouseButtonRelease && snakeMoving_) {
+        snakeMoving_ = false;
+        // Solidify the circle with a solid line
+        redrawSnakeCircle();
+        setStatusText(
+            QString("Snake circle moved -- centre (%.0f, %.0f), radius %.0f px. "
                     "Press 'Process Image' to evolve.")
                 .arg(snakeCenter_.x())
                 .arg(snakeCenter_.y())
@@ -753,9 +892,12 @@ void MainWindow::onProcessingFinished()
     PipelineResult result = watcher_->result();
     snakeContour_ = result.snakeContour;
 
+    // Store full-res output pixmap so zoom can resample it
+    outputBasePixmap_ = QPixmap::fromImage(result.outputImage);
     edgesLabel_->setPixmap(
-        QPixmap::fromImage(result.outputImage)
-            .scaled(edgesLabel_->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
+        outputBasePixmap_.scaled(
+            edgesLabel_->size() * outputZoom_,
+            Qt::KeepAspectRatio, Qt::SmoothTransformation));
 
     QString fullText = result.statusText;
     if (!result.chainCodes.empty()) {

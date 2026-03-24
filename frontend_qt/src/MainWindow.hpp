@@ -10,6 +10,7 @@
 #include <QPushButton>
 #include <QSlider>
 #include <QPointF>
+#include <QPixmap>
 
 #include "Image.hpp"
 #include "Snake.hpp"
@@ -33,6 +34,7 @@ private slots:
 private:
     static QImage toQImage(const backend::GrayImage& image);
     void setStatusText(const QString& text);
+    void redrawSnakeCircle();
 
     // Core image state
     backend::GrayImage image_;
@@ -40,11 +42,19 @@ private:
 
     // Snake runtime state
     backend::SnakeContour snakeContour_;      ///< Latest evolved contour
-    QPointF snakeCenter_;                     ///< Click position in image coordinates
-    float   snakeRadius_  = 0.0f;            ///< Drag radius in image pixels
+    QPointF snakeCenter_;                     ///< Circle centre in image coordinates
+    float   snakeRadius_  = 0.0f;            ///< Circle radius in image pixels
     QPointF snakePressPos_;                   ///< Raw widget position at mouse-press
-    bool    snakePlacing_ = false;            ///< True while user is dragging a circle
+    bool    snakePlacing_ = false;            ///< True while user is drawing a NEW circle
+    bool    snakeMoving_  = false;            ///< True while user is dragging an existing circle
+    QPointF snakeMoveOffset_;                 ///< Offset from circle centre to press point (label coords)
     QPixmap snakeOverlayPixmap_;              ///< Clean copy of input pixmap for overlay
+
+    // Zoom state
+    double  inputZoom_  = 1.0;               ///< Current zoom factor for input panel
+    double  outputZoom_ = 1.0;               ///< Current zoom factor for output panel
+    QPixmap inputBasePixmap_;                 ///< Full-res pixmap for input (before zoom)
+    QPixmap outputBasePixmap_;                ///< Full-res pixmap for output (before zoom)
 
     // Pipeline result -- carries all computed output across the thread boundary
     // so the worker thread never touches Qt widgets directly.
