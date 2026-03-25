@@ -1,3 +1,12 @@
+### Team 5:
+- Zeyad Ashraf Ahmed Mohamed
+- Ekram Ahmed Auf Mohamed
+- Nour Bahgat Zain el-deen
+- Nour Allah Hassan
+- Farida Hesham Hammad
+- Amira El-Sayed El-Demerdash
+
+
 # Image Processing Project
 
 This project is a C++ application with a Qt frontend that performs image processing tasks, including Canny edge detection and Hough transforms for line and circle detection.
@@ -48,4 +57,7 @@ This project is a C++ application with a Qt frontend that performs image process
 4.  Select the desired detection type from the dropdown menu.
 5.  Click the "Detect Edges / Lines / Circles" button to run the pipeline.
 6.  The results will be displayed in the right-hand panel, and a summary will be shown in the text box below.
+
+
+
 
