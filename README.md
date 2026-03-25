@@ -1,3 +1,14 @@
+### Team 5:
+- Zeyad Ashraf Ahmed Mohamed
+- Ekram Ahmed Auf Mohamed
+- Nour Bahgat Zain el-deen
+- Nour Allah Hassan
+- Farida Hesham Hammad
+- Amira El-Sayed El-Demerdash
+
+
+## Note: Last version is on final branch
+
 # Image Processing Project
 
 This project is a C++ application with a Qt frontend that performs image processing tasks, including Canny edge detection and Hough transforms for line and circle detection.
